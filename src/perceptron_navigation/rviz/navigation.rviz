@@ -1,0 +1,340 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+      Splitter Ratio: 0.5
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 20
+      Color: 100; 100; 100
+      Alpha: 0.3
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Collision Enabled: false
+      Visual Enabled: true
+      Description Source: Topic
+      Description File: ""
+      Description Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /robot_description
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Name: TF
+      Enabled: false
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+      Marker Scale: 0.4
+      Show Arrows: false
+      Show Axes: true
+      Show Names: true
+      Update Interval: 0
+      Value: false
+    - Alpha: 1
+      Class: rviz_default_plugins/Map
+      Name: Map
+      Enabled: true
+      Color Scheme: map
+      Draw Behind: true
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map_updates
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /map
+      Value: true
+    - Alpha: 0.6
+      Class: rviz_default_plugins/Map
+      Name: GlobalCostmap
+      Enabled: true
+      Color Scheme: costmap
+      Draw Behind: false
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /global_costmap/costmap
+      Value: true
+    - Alpha: 0.7
+      Class: rviz_default_plugins/Map
+      Name: LocalCostmap
+      Enabled: false
+      Color Scheme: costmap
+      Draw Behind: false
+      Topic:
+        Depth: 1
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_costmap/costmap
+      Value: false
+    - Alpha: 1
+      Class: rviz_default_plugins/LaserScan
+      Name: LaserScan
+      Enabled: true
+      Color: 255; 40; 40
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Position Transformer: XYZ
+      Size (m): 0.03
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /scan
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Name: Lidar3D
+      Enabled: false
+      Autocompute Intensity Bounds: true
+      Axis: Z
+      Color: 255; 255; 255
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Max Intensity: 4096
+      Min Intensity: 0
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.02
+      Style: Flat Squares
+      Use Fixed Frame: true
+      Use rainbow: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /points
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Name: DepthCloud
+      Enabled: false
+      Autocompute Intensity Bounds: true
+      Axis: Z
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
+      Max Intensity: 4096
+      Min Intensity: 0
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.01
+      Style: Flat Squares
+      Use Fixed Frame: true
+      Use rainbow: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /depth_camera/points
+      Value: true
+    - Alpha: 0.7
+      Class: rviz_default_plugins/Map
+      Name: TraversabilityGrid
+      Enabled: false
+      Color Scheme: costmap
+      Draw Behind: false
+      Update Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /traversability_grid_updates
+      Topic:
+        Depth: 5
+        Durability Policy: Transient Local
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /traversability_grid
+      Use Timestamp: false
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointCloud2
+      Name: TraversabilityObstacles
+      Enabled: false
+      Autocompute Intensity Bounds: true
+      Axis: Z
+      Color: 255; 0; 255
+      Color Transformer: FlatColor
+      Decay Time: 0
+      Max Intensity: 4096
+      Min Intensity: 0
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.05
+      Style: Boxes
+      Use Fixed Frame: true
+      Use rainbow: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /traversability_obstacles
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Name: ExploreCamera
+      Enabled: false
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Normalize Range: false
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /exploration/debug_image
+      Value: false
+    - Class: rviz_default_plugins/Image
+      Name: DepthImage
+      Enabled: false
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Normalize Range: false
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /depth_camera/depth/image_raw
+      Value: false
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Name: GlobalPlan
+      Enabled: true
+      Color: 0; 255; 0
+      Line Style: Lines
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /plan
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Name: LocalPlan
+      Enabled: true
+      Color: 0; 170; 255
+      Line Style: Lines
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /local_plan
+      Value: true
+    - Alpha: 1
+      Axes Length: 0.25
+      Axes Radius: 0.02
+      Class: rviz_default_plugins/Pose
+      Name: DockEstimate
+      Enabled: true
+      Color: 255; 255; 0
+      Shape: Axes
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /docking/dock_estimate
+      Value: true
+    - Class: rviz_default_plugins/Image
+      Name: CameraDebug
+      Enabled: false
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Normalize Range: false
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /docking/debug_image
+      Value: false
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: map
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/SetInitialPose
+      Covariance x: 0.25
+      Covariance y: 0.25
+      Covariance yaw: 0.06853891909122467
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /initialpose
+    - Class: rviz_default_plugins/SetGoal
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /goal_pose
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Distance: 14
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Pitch: 1.4
+      Yaw: 1.57
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 900
+  Width: 1400

@@ -1,0 +1,27 @@
+<package format="3">
+  <name>perceptron_robot_control</name>
+  <version>0.0.0</version>
+  <description>Control configs for Perceptron robot</description>
+  <maintainer email="yadi@todo.todo">yadi</maintainer>
+  <license>TODO: License declaration</license>
+
+  <!-- Build + exec -->
+  <depend>rclpy</depend>
+  <depend>controller_manager</depend>
+  <depend>xacro</depend>
+  <depend>ros2_control</depend>
+
+  <!-- Exec-only -->
+  <exec_depend>ros2_controllers</exec_depend>
+  <exec_depend>diff_drive_controller</exec_depend>
+  <exec_depend>joint_state_broadcaster</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

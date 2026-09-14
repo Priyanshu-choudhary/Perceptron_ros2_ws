@@ -1,0 +1,690 @@
+# Nav2 parameters for the Perceptron 4-wheel skid-steer base.
+#
+# Robot numbers all come from perceptron_robot_description, and the two that
+# matter most are:
+#   robot_radius 0.33  - the chassis is 0.415 x 0.4526 m and base_footprint is
+#                        not quite at its centre, so the furthest corner is
+#                        0.319 m away. A robot that turns on the spot is
+#                        honestly modelled by its circumscribed circle, so use
+#                        a radius rather than a footprint polygon.
+#   velocity caps      - diff_drive_controller allows 0.6 m/s and 1.5 rad/s;
+#                        Nav2 is held well below that so the skid-steer is not
+#                        scrubbing at its friction limit while planning.
+#
+# Lidar is an LDROBOT D500: 0.03-12 m, 10 Hz, 500 points per revolution.
+# obstacle_max_range is set below the sensor maximum on purpose - far returns
+# are the noisiest and marking them just smears the costmap.
+
+amcl:
+  ros__parameters:
+    use_sim_time: true
+    alpha1: 0.2        # rotation noise from rotation
+    alpha2: 0.2        # rotation noise from translation
+    alpha3: 0.2        # translation noise from translation
+    alpha4: 0.2        # translation noise from rotation
+    alpha5: 0.2        # only used by the omni model
+    base_frame_id: "base_footprint"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    laser_max_range: 12.0
+    laser_min_range: 0.05
+    laser_model_type: "likelihood_field"
+    max_beams: 90
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "nav2_amcl::DifferentialMotionModel"
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    update_min_a: 0.2
+    update_min_d: 0.25
+    z_hit: 0.5
+    z_max: 0.05
+    z_rand: 0.5
+    z_short: 0.05
+    scan_topic: scan
+    # Seed AMCL from the pose the robot was actually spawned at.
+    #
+    # Without this AMCL waits for someone to publish /initialpose - normally a
+    # human dragging "2D Pose Estimate" in RViz - and until then it refuses to
+    # publish map -> odom at all. The symptom is "AMCL cannot publish a pose or
+    # update the transform. Please set the initial pose...", followed by every
+    # Nav2 server complaining that the map frame does not exist, and a robot
+    # that will not move. In simulation the launch file already knows exactly
+    # where it put the robot, so making a person re-enter it is pure ceremony.
+    #
+    # navigation.launch.py rewrites the three values below from the spawn pose.
+    # On the real robot there is no such ground truth: set set_initial_pose to
+    # false there and place the robot yourself.
+    set_initial_pose: true
+    initial_pose.x: 0.0
+    initial_pose.y: 0.0
+    initial_pose.z: 0.0
+    initial_pose.yaw: 0.0
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: true
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /diff_drive_controller/odom
+    # Nav2's defaults are 10 and 20 ms. On a 4-core WSL VM running Gazebo, the
+    # camera pipeline and the whole Nav2 stack at once, the behaviour tree
+    # cannot hold a 100 Hz tick and every action call times out with
+    # "Timed out while waiting for action server to acknowledge goal request",
+    # which surfaces as goals that fail for no visible reason. Slower tick,
+    # longer patience. Raise them further if you still see those warnings.
+    bt_loop_duration: 20
+    # Placeholder. navigation.launch.py rewrites this with the behaviour tree
+    # for the selected nav_profile (dwb or mppi); it is never used as written.
+    default_nav_to_pose_bt_xml: "OVERRIDDEN_BY_LAUNCH"
+    default_server_timeout: 50
+    wait_for_service_timeout: 3000
+    plugin_lib_names:
+      - nav2_compute_path_to_pose_action_bt_node
+      - nav2_compute_path_through_poses_action_bt_node
+      - nav2_smooth_path_action_bt_node
+      - nav2_follow_path_action_bt_node
+      - nav2_spin_action_bt_node
+      - nav2_wait_action_bt_node
+      - nav2_assisted_teleop_action_bt_node
+      - nav2_back_up_action_bt_node
+      - nav2_drive_on_heading_bt_node
+      - nav2_clear_costmap_service_bt_node
+      - nav2_is_stuck_condition_bt_node
+      - nav2_goal_reached_condition_bt_node
+      - nav2_goal_updated_condition_bt_node
+      - nav2_globally_updated_goal_condition_bt_node
+      - nav2_is_path_valid_condition_bt_node
+      - nav2_initial_pose_received_condition_bt_node
+      - nav2_reinitialize_global_localization_service_bt_node
+      - nav2_rate_controller_bt_node
+      - nav2_distance_controller_bt_node
+      - nav2_speed_controller_bt_node
+      - nav2_truncate_path_action_bt_node
+      - nav2_truncate_path_local_action_bt_node
+      - nav2_goal_updater_node_bt_node
+      - nav2_recovery_node_bt_node
+      - nav2_pipeline_sequence_bt_node
+      - nav2_round_robin_node_bt_node
+      - nav2_transform_available_condition_bt_node
+      - nav2_time_expired_condition_bt_node
+      - nav2_path_expiring_timer_condition
+      - nav2_distance_traveled_condition_bt_node
+      - nav2_single_trigger_bt_node
+      - nav2_goal_updated_controller_bt_node
+      - nav2_is_battery_low_condition_bt_node
+      - nav2_navigate_through_poses_action_bt_node
+      - nav2_navigate_to_pose_action_bt_node
+      - nav2_remove_passed_goals_action_bt_node
+      - nav2_planner_selector_bt_node
+      - nav2_controller_selector_bt_node
+      - nav2_goal_checker_selector_bt_node
+      - nav2_controller_cancel_bt_node
+      - nav2_path_longer_on_approach_bt_node
+      - nav2_wait_cancel_bt_node
+      - nav2_spin_cancel_bt_node
+      - nav2_back_up_cancel_bt_node
+      - nav2_assisted_teleop_cancel_bt_node
+      - nav2_drive_on_heading_cancel_bt_node
+
+controller_server:
+  ros__parameters:
+    use_sim_time: true
+    controller_frequency: 20.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    failure_tolerance: 0.3
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugins: ["general_goal_checker"]
+    controller_plugins: ["FollowPath", "FollowPathMPPI"]
+
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      # 0.5 m was too strict. Rounding the partition the controller legitimately
+      # crawls while it rotates the skid-steer onto the new heading, and covering
+      # half a metre inside the allowance was not achievable: tools/navtest.sh
+      # mission failed at WP2 three times out of three, always with
+      # "Failed to make progress" followed by spin and backup recoveries.
+      required_movement_radius: 0.25
+      # Nav2's default is 10 s. On a loaded machine the control loop runs slowly
+      # enough that a legitimate tight manoeuvre - squeezing past the partition,
+      # or rotating in place before a narrow gap - fails to cover 0.5 m in time.
+      # That surfaces as "Failed to make progress", a backup recovery, and a
+      # journey that takes far longer than it should.
+      movement_time_allowance: 45.0
+
+    general_goal_checker:
+      stateful: true
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.15
+      yaw_goal_tolerance: 0.20
+
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: true
+      # No reverse: there is no rear-facing sensor on this robot, so backing up
+      # under the planner's control is driving blind. The recovery behaviours
+      # can still back up deliberately.
+      min_vel_x: 0.0
+      min_vel_y: 0.0
+      max_vel_x: 0.35
+      max_vel_y: 0.0
+      max_vel_theta: 1.0
+      min_speed_xy: 0.0
+      max_speed_xy: 0.35
+      min_speed_theta: 0.0
+      acc_lim_x: 1.0
+      acc_lim_y: 0.0
+      acc_lim_theta: 2.0
+      decel_lim_x: -1.0
+      decel_lim_y: 0.0
+      decel_lim_theta: -2.0
+      vx_samples: 20
+      vy_samples: 1        # differential drive, no sideways motion
+      vtheta_samples: 40
+      sim_time: 1.7
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+      transform_tolerance: 0.2
+      xy_goal_tolerance: 0.15
+      trans_stopped_velocity: 0.25
+      short_circuit_trajectory_evaluation: true
+      stateful: true
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign",
+                "PathAlign", "PathDist", "GoalDist"]
+      BaseObstacle.scale: 0.02
+      PathAlign.scale: 32.0
+      PathAlign.forward_point_distance: 0.1
+      GoalAlign.scale: 24.0
+      GoalAlign.forward_point_distance: 0.1
+      PathDist.scale: 32.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
+
+    # The terrain profile's controller. See behavior_trees/nav_to_pose_mppi.xml
+    # for why a sampling controller is the right answer for a skid-steer.
+    FollowPathMPPI:
+      plugin: "nav2_mppi_controller::MPPIController"
+      time_steps: 32
+      model_dt: 0.05
+      batch_size: 600
+      vx_std: 0.2
+      vy_std: 0.2
+      wz_std: 0.4
+      vx_max: 0.35
+      # Forward only, same rule as DWB above. Allowing a 0.20 m/s reverse was
+      # tried and measurably made things worse - the robot traded ground back
+      # and forth instead of committing - so the rule stays.
+      vx_min: 0.0
+      vy_max: 0.0
+      wz_max: 1.0
+      iteration_count: 1
+      prune_distance: 1.7
+      transform_tolerance: 0.2
+      temperature: 0.3
+      gamma: 0.015
+      motion_model: "DiffDrive"
+      visualize: false
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic",
+                "PathAlignCritic", "PathFollowCritic", "PathAngleCritic",
+                "PreferForwardCritic"]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 0.5
+      # CostCritic rather than ObstaclesCritic: it scores against the costmap's
+      # graded cost instead of a binary collision test, which is what a
+      # traversability layer publishing "expensive but drivable" needs.
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.81
+        critical_cost: 300.0
+        consider_footprint: false
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 14.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        forward_preference: true
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      use_sim_time: true
+      update_frequency: 4.0
+      publish_frequency: 1.0
+      global_frame: odom
+      robot_base_frame: base_link
+      rolling_window: true
+      width: 4
+      height: 4
+      resolution: 0.05
+      robot_radius: 0.33
+      plugins: ["obstacle_layer", "inflation_layer"]
+      # LEVEL 6, dynamic obstacles: the obstacle layer marks whatever the lidar
+      # sees right now and clears what it does not, so a person walking across
+      # the room appears and disappears here and the controller replans around
+      # them without touching the static map.
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan terrain
+        terrain:
+          # /traversability_obstacles is what traversability_node emits: one
+          # point for every grid cell it judged impassable, whether that is a
+          # rock standing proud of the sand or the rim of a crater. The cloud
+          # is already in base_footprint and the points are lifted to roughly
+          # 10 cm above local ground, because a crater floor is BELOW the
+          # costmap's z window and would otherwise be discarded as floor.
+          #
+          # marking only, never clearing. The cloud is sparse and derived, so
+          # letting it raytrace would punch holes through obstacles the lidar
+          # legitimately sees. Cells it does mark are terrain, which does not
+          # walk away; the rolling window forgets them when they scroll out.
+          #
+          # Nothing publishes this topic unless traversability_node is running,
+          # and an observation buffer with no expected_update_rate counts as
+          # current even when empty, so leaving this configured costs nothing
+          # on the indoor stack.
+          topic: /traversability_obstacles
+          sensor_frame: base_footprint
+          data_type: "PointCloud2"
+          marking: true
+          clearing: false
+          min_obstacle_height: 0.02
+          max_obstacle_height: 0.80
+          obstacle_max_range: 6.0
+          obstacle_min_range: 0.0
+        scan:
+          topic: /scan
+          sensor_frame: laser_link
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 10.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 8.0
+          obstacle_min_range: 0.0
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        # A little over the robot radius, so the planner prefers the middle of
+        # a gap but can still squeeze through one when it has to.
+        inflation_radius: 0.55
+      always_send_full_costmap: true
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      use_sim_time: true
+      update_frequency: 1.0
+      publish_frequency: 1.0
+      global_frame: map
+      robot_base_frame: base_link
+      resolution: 0.05
+      track_unknown_space: true
+      robot_radius: 0.33
+      # A rolling global costmap, sized in metres rather than by the map.
+      #
+      # Sized by the map, the costmap is exactly as big as whatever has been
+      # mapped so far, and the planner refuses anything outside it with "Robot
+      # is out of bounds of the costmap!". That is fatal in two places that
+      # matter: docking_world, where slam_toolbox has only the dock to see and
+      # the map comes out about 2.0 x 0.3 m, and the lunar arena, which has no
+      # walls to bound a map with at all. So rolling it stays.
+      #
+      # SIZE IT FROM THE WORLD, NOT FROM A GUESS. A rolling window is centred
+      # on the robot, so its reach is only HALF its width. 20 m was chosen when
+      # room_world (8.1 x 6.1 m surveyed, 10.1 m corner to corner) was the only
+      # world, and it fitted with nothing to spare.
+      #
+      # small_house surveys 18.8 x 11.2 m, 21.9 m corner to corner, so a 20 m
+      # window reaches barely half the house. Goals past 10 m fell off the edge
+      # and the planner reported, correctly and unhelpfully,
+      #     worldToMap failed: mx,my: 473,168, size_x,size_y: 400,400
+      #     The goal sent to the planner is off the global costmap.
+      # which reads like a planner fault and is not one - no planner can route
+      # to a cell it has no grid for.
+      #
+      # 48 m square gives 24 m of reach: small_house measures 21.9 m corner
+      # to corner, so the whole house is reachable from anywhere in it, with
+      # 2.1 m to spare and no more.
+      #
+      # Measured cost of the window, small_house on the saved map, 8 goals
+      # 9-15 m out, machine otherwise idle:
+      #
+      #   window  cells   reach   NavFn plan   Smac2D plan   planner RSS
+      #    48 m    922k    24 m      17 ms        11 ms         74 MB
+      #    96 m   3686k    48 m      24 ms        11 ms        135 MB
+      #   160 m  10240k    80 m      94 ms        11 ms        280 MB
+      #   240 m  23040k   120 m     189 ms        11 ms        562 MB
+      #
+      # NavFn is Dijkstra and floods the whole grid, so its cost tracks total
+      # cells; SmacPlanner2D is A* and only expands towards the goal, so it is
+      # flat at 11 ms however big the window gets. No costmap update-rate
+      # misses were logged at any of these sizes.
+      #
+      # The window is deliberately the small one and the default planner is
+      # Smac2D, whose cost does not move with it. That pairing is cheapest of
+      # all - 11 ms of planning and 74 MB - and it is why growing the window
+      # later is a one-line change rather than a retuning exercise.
+      #
+      # A rolling window can never reach further than half its width, so a
+      # goal further away than that needs either a bigger window or an
+      # intermediate goal on the way. Two consequences of 24 m of reach:
+      #
+      #   - small_house fits, but only just. Any larger world needs this
+      #     raised. Measure the map, do not guess.
+      #   - Smac2D does not report an off-costmap goal as a failure; it
+      #     returns a path truncated at the boundary and calls it SUCCEEDED
+      #     (see the note on the planner below). With NavFn the symptom was a
+      #     log line naming the problem; now the symptom is a robot that stops
+      #     early for no stated reason. If that happens, suspect this number
+      #     first.
+      rolling_window: true
+      width: 48
+      height: 48
+      # LEVEL 5, static obstacles: the static layer is the saved map. In SLAM
+      # mode it is the live map from slam_toolbox instead.
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: true
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: true
+        observation_sources: scan terrain
+        terrain:
+          # /traversability_obstacles is what traversability_node emits: one
+          # point for every grid cell it judged impassable, whether that is a
+          # rock standing proud of the sand or the rim of a crater. The cloud
+          # is already in base_footprint and the points are lifted to roughly
+          # 10 cm above local ground, because a crater floor is BELOW the
+          # costmap's z window and would otherwise be discarded as floor.
+          #
+          # marking only, never clearing. The cloud is sparse and derived, so
+          # letting it raytrace would punch holes through obstacles the lidar
+          # legitimately sees. Cells it does mark are terrain, which does not
+          # walk away; the rolling window forgets them when they scroll out.
+          #
+          # Nothing publishes this topic unless traversability_node is running,
+          # and an observation buffer with no expected_update_rate counts as
+          # current even when empty, so leaving this configured costs nothing
+          # on the indoor stack.
+          topic: /traversability_obstacles
+          sensor_frame: base_footprint
+          data_type: "PointCloud2"
+          marking: true
+          clearing: false
+          min_obstacle_height: 0.02
+          max_obstacle_height: 0.80
+          obstacle_max_range: 6.0
+          obstacle_min_range: 0.0
+        scan:
+          topic: /scan
+          sensor_frame: laser_link
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
+          data_type: "LaserScan"
+          raytrace_max_range: 10.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 8.0
+          obstacle_min_range: 0.0
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.55
+      always_send_full_costmap: true
+
+map_server:
+  ros__parameters:
+    use_sim_time: true
+    yaml_filename: ""      # supplied by the launch file
+
+map_saver:
+  ros__parameters:
+    use_sim_time: true
+    save_map_timeout: 5.0
+    free_thresh_default: 0.25
+    occupied_thresh_default: 0.65
+    map_subscribe_transient_local: true
+
+planner_server:
+  ros__parameters:
+    use_sim_time: true
+    # The planner only runs when the behaviour tree asks for a path, so this is
+    # a warning threshold rather than a duty cycle. 20 Hz was unreachable and
+    # produced a warning per replan.
+    expected_planner_frequency: 5.0
+    planner_plugins: ["GridBased", "GridBasedUnknown", "Smac2D", "ThetaStar"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      tolerance: 0.5
+      use_astar: false
+      # FALSE, and this matters more than it looks.
+      #
+      # A lidar only ever sees surfaces, so the INTERIOR of every wall stays
+      # unknown in the occupancy grid: a wall 0.15 m thick renders as two
+      # occupied faces with an unknown strip between them. With allow_unknown
+      # true, NavFn treats that strip as traversable and will plan straight
+      # through the middle of a wall whenever doing so is shorter than going
+      # around.
+      #
+      # That is exactly what happened here. Routing from the north-west corner
+      # to the far side of the partition, cutting through its 0.05 m unknown
+      # core beat travelling around the south end, so the planner kept emitting
+      # a path into a wall, the controller could not follow it, and the robot
+      # sat in open space reporting "Failed to make progress" - about a metre
+      # from the partition, with nothing near enough to explain it. Approaching
+      # the same goal from the south-west always worked, because from there the
+      # legitimate route was the shorter one.
+      #
+      # Set it true only when navigating in genuinely unexplored space, and
+      # accept that walls will look passable when you do.
+      allow_unknown: false
+
+    # The terrain profile's global planner. NavFn treats every non-lethal cell
+    # as equally cheap; SmacPlanner2D weights the costmap, so a graded
+    # traversability cost actually steers the route instead of only forbidding
+    # it. Same allow_unknown reasoning as above.
+    # Docking only, and the ONLY difference from GridBased is allow_unknown.
+    #
+    # The dock approach is one to two metres towards a marker the robot can
+    # already see, and it starts before the lidar has swept the floor either
+    # side of the route. Every cell it has not swept is NO_INFORMATION, so
+    # GridBased - which refuses unknown, for good reasons that apply to long
+    # routes past thick walls - cannot find a path off-axis at all. Both
+    # off-axis docking attempts died this way while the head-on one, whose route
+    # happens to lie along the strip the lidar had already seen, succeeded.
+    #
+    # Unobserved floor a metre from a robot that is looking at a dock is floor.
+    # The obstacle layer and inflation still cover everything the 360 deg scan
+    # does see, which is what actually stops the robot hitting the dock.
+    GridBasedUnknown:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      tolerance: 0.5
+      use_astar: false
+      allow_unknown: true
+
+    # Any-angle A*. NavFn and SmacPlanner2D route along grid edges; Theta*
+    # checks line of sight between cells, so it emits long straight segments
+    # with corner points only where the route actually turns - 249 poses for a
+    # path NavFn spends 525 on, and the straightest routes measured here
+    # (length/straight-line 1.02 against NavFn's 1.04).
+    #
+    # NOT A DEFAULT, AND DO NOT MAKE IT ONE. Measured over 12 goals 10-15.6 m
+    # away in small_house with only 0.20 m of clearance - goals inside the
+    # 0.55 m inflation radius, which is what a dock approach or a doorway
+    # actually looks like:
+    #
+    #     NavFn / SmacPlanner2D   11 of 12 reached
+    #     Theta*                   5 of 12 reached
+    #
+    # Its line-of-sight check plus w_traversal_cost refuses routes that squeeze
+    # past inflated obstacles, so indoors it declines over half the goals the
+    # other planners solve. On genuinely open ground - the lunar arena, where
+    # there is nothing to squeeze past - the straight paths and 12 ms planning
+    # time are exactly what is wanted. That is the case it is here for.
+    ThetaStar:
+      plugin: "nav2_theta_star_planner/ThetaStarPlanner"
+      how_many_corners: 8
+      w_euc_cost: 1.0
+      w_traversal_cost: 2.0
+      w_heuristic_cost: 1.0
+      allow_unknown: false
+      use_final_approach_orientation: false
+
+    # Cost-aware grid A*, and the fastest of the three indoors (20 ms against
+    # NavFn's 23 on the tight goal set). Equally capable: 12 of 12 open goals
+    # and 11 of 12 tight, failing on the same single unreachable goal NavFn
+    # fails on, so there is nothing to gain from chaining one after the other.
+    #
+    # ONE IMPORTANT DIFFERENCE FROM NavFn. Asked for a goal outside the global
+    # costmap, NavFn refuses and says so:
+    #     The goal sent to the planner is off the global costmap.
+    # SmacPlanner2D instead returns a path truncated at the costmap boundary
+    # and reports SUCCEEDED. Measured against a deliberately undersized 20 m
+    # costmap, it "solved" 12 of 12 goals while actually reaching 4, ending an
+    # average of 2.22 m short - and a path whose length came out 0.97 of the
+    # straight-line distance to a goal it never arrived at.
+    #
+    # THIS IS THE DEFAULT PLANNER, chosen for how it scales. NavFn is
+    # Dijkstra and floods the whole grid, so its cost tracks the window size
+    # (17 ms at 48 m, 94 ms at 160 m, 189 ms at 240 m); SmacPlanner2D is A*
+    # and only expands towards the goal, so it stays at 11 ms at every size
+    # measured. Planning cost therefore stops being a reason not to enlarge
+    # the global costmap.
+    #
+    # The trade accepted in exchange is the silent truncation above: NavFn
+    # names an off-costmap goal in the log, this does not. GridBased is still
+    # configured and is the better choice when diagnosing a goal that is not
+    # being reached - switch a behaviour tree to it for one run and it will
+    # say what Smac2D will not.
+    Smac2D:
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.5
+      downsample_costmap: false
+      downsampling_factor: 1
+      allow_unknown: false
+      max_iterations: 1000000
+      max_on_approach_iterations: 1000
+      max_planning_time: 5.0
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: false
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: true
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: true
+
+behavior_server:
+  ros__parameters:
+    use_sim_time: true
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "assisted_teleop", "wait"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    assisted_teleop:
+      plugin: "nav2_behaviors/AssistedTeleop"
+    global_frame: odom
+    robot_base_frame: base_link
+    transform_tolerance: 0.1
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 1.0
+    min_rotational_vel: 0.4
+    rotational_acc_lim: 2.0
+
+waypoint_follower:
+  ros__parameters:
+    use_sim_time: true
+    loop_rate: 20
+    stop_on_failure: false
+    waypoint_task_executor_plugin: "wait_at_waypoint"
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
+      enabled: true
+      waypoint_pause_duration: 200
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: true
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.35, 0.0, 1.0]
+    min_velocity: [-0.35, 0.0, -1.0]
+    max_accel: [1.0, 0.0, 2.0]
+    max_decel: [-1.0, 0.0, -2.0]
+    odom_topic: "/diff_drive_controller/odom"
+    odom_duration: 0.1
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0

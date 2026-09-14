@@ -1,0 +1,51 @@
+<!--
+  Terrain profile: SmacPlanner2D global planner ("Smac2D") + MPPI local
+  controller ("FollowPathMPPI").
+
+  WHY THIS EXISTS
+  DWB predicts each candidate trajectory with an exact differential-drive motion
+  model. This base is a 4-wheel skid-steer, and tools/drivetest.sh measures what
+  that costs: a commanded 114.6 deg spin achieves 103 deg, and 4 s of spinning
+  also translates the robot 0.13 m sideways. So DWB's rollouts are systematically
+  wrong, it scores near-obstacle trajectories badly, crawls, and trips
+  SimpleProgressChecker. That is the WP1 -> WP2 failure round the partition.
+
+  MPPI samples rollouts and scores them with weighted critics instead of
+  assuming the model is exact, which tolerates the scrub. SmacPlanner2D is used
+  with it because it is cost-aware: it follows costmap gradients rather than
+  treating every non-lethal cell as equally free, which is what a graded
+  traversability cost needs. NOT SmacPlannerHybrid - that imposes a minimum
+  turning radius, and this robot turns in place.
+
+  Selected with:  ros2 launch perceptron_navigation nav_simulation.launch.py nav_profile:=mppi
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="Smac2D"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPathMPPI"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Spin spin_dist="1.57"/>
+          <Wait wait_duration="5"/>
+          <BackUp backup_dist="0.30" backup_speed="0.05"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

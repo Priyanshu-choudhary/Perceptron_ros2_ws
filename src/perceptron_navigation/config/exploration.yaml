@@ -1,0 +1,51 @@
+# Indoor, planar exploration with laser SLAM and optional RGB ArUco search.
+# The marker_size must be the side length of the printed BLACK square.
+exploration_node:
+  ros__parameters:
+    target_marker_id: -1               # -1: map only; explore search ID changes it while idle
+    robot_radius: 0.33
+    clearance_margin: 0.05
+    frontier_standoff: 0.65
+    min_frontier_cells: 5
+    # Only stops degenerate goals underfoot. Raising this to 0.80 to cure the
+    # nibbling was a mistake: candidates must also sit within frontier_standoff
+    # of a frontier and clear of unknown space, and the three constraints
+    # together left no eligible cell at all - the run ended with goals_sent 0.
+    # frontier_gain_weight is the lever that fixes nibbling; this is not.
+    min_goal_distance: 0.35
+    viewpoint_spacing: 1.2
+    # How strongly a big unexplored frontier outweighs a close one, in metres of
+    # travel per metre of frontier. Below about 1.0 the nearest scrap always
+    # wins and exploration stalls; too high and the robot crosses the map for a
+    # marginally larger frontier.
+    frontier_gain_weight: 2.5
+    # If the robot's own cell fails the footprint test, look this far for a safe
+    # cell to flood-fill from before declaring the robot lost.
+    seed_search_radius: 1.0
+    max_clearance_recoveries: 3
+    recovery_backup_distance: 0.25
+    max_duration: 900.0                # simulation seconds, including startup
+    max_goals: 150
+    goal_timeout: 120.0
+    startup_timeout: 120.0             # wall seconds, also catches a missing /clock
+    sensor_timeout: 3.0
+    map_timeout: 12.0
+    action_ack_timeout: 15.0           # wall seconds
+    cancel_timeout: 10.0               # wall seconds
+    settle_seconds: 3.0
+    failed_goal_cooldown: 120.0
+    visited_goal_cooldown: 60.0
+    goal_exclusion_radius: 0.45
+    marker_confirmations: 3
+    marker_consistency_distance: 0.30
+    # How long to wait for the transform at a detection's timestamp. The camera
+    # runs ahead of the transform chain by a few ms; without a wait every lookup
+    # failed and no marker was ever confirmed.
+    marker_transform_timeout: 0.15
+
+aruco_search_detector:
+  ros__parameters:
+    camera_image_topic: /camera/image_raw
+    camera_info_topic: /camera/camera_info
+    max_detection_rate: 5.0
+    max_reprojection_error: 3.0

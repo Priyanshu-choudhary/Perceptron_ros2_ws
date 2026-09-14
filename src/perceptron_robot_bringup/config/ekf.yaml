@@ -1,0 +1,95 @@
+# robot_localization EKF: wheel encoders + IMU -> odom -> base_footprint
+#
+# WHY THIS EXISTS
+# This is a 4-wheel skid-steer. Turning requires every tyre to scrub sideways,
+# so wheel odometry is systematically bad in yaw - that is why
+# wheel_separation_multiplier had to be measured rather than derived, and why
+# repeat runs of tools/drivetest.sh gave true yaw anywhere between 97 and 103
+# degrees for the same command. A gyro does not scrub. Fusing gyro yaw rate with
+# wheel linear velocity is the single biggest odometry improvement available to
+# this robot, and the IMU was already publishing into the void.
+#
+# WHAT IS FUSED, AND WHAT IS DELIBERATELY NOT
+#   odom0  vx only          - trust the wheels for how far, not for which way
+#   imu0   vyaw only        - trust the gyro for which way, not for how far
+#
+# Absolute yaw from the IMU is NOT fused. The simulated IMU has no magnetometer,
+# so its heading is an integrated gyro and drifts without bound; feeding that in
+# as an absolute measurement would fight AMCL, which is the thing that actually
+# knows the heading in the map frame. Linear acceleration is not fused either:
+# double-integrating accelerometer noise into position is a well-known way to
+# make odometry worse, not better.
+#
+# The lidar is not an EKF input and should not be. Scan matching belongs to AMCL
+# or slam_toolbox in the map frame. Feeding it here as well would double-count
+# the same evidence and make the filter overconfident.
+#
+# ONLY ONE NODE MAY PUBLISH odom -> base_footprint
+# This one does. diff_drive_controller therefore has enable_odom_tf: false, and
+# stm32_bridge_node has publish_tf: false. Two publishers on the same transform
+# is a genuinely nasty failure: TF silently interleaves them and the robot
+# appears to stutter between two slightly different poses.
+
+ekf_filter_node:
+  ros__parameters:
+    use_sim_time: true
+
+    # 25 Hz is comfortably above the 10 Hz controller and the 50 Hz odometry it
+    # consumes, without adding avoidable load on a machine that is already
+    # missing control-loop deadlines.
+    frequency: 25.0
+    sensor_timeout: 0.2
+    two_d_mode: true              # planar robot: z, roll and pitch are pinned to zero
+    publish_tf: true
+    publish_acceleration: false
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom             # this is the odom-frame filter; AMCL owns map -> odom
+
+    # Order of the 15 flags is:
+    #   x     y     z
+    #   roll  pitch yaw
+    #   vx    vy    vz
+    #   vroll vpitch vyaw
+    #   ax    ay    az
+
+    odom0: /diff_drive_controller/odom
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  false, false,
+                   false, false, false,
+                   false, false, false]
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+
+    imu0: /imu/data_raw
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 10
+    imu0_remove_gravitational_acceleration: true
+
+    # Process noise. Only the entries the filter actually estimates matter here;
+    # the rest are inherited defaults. Larger means "trust the model less".
+    process_noise_covariance: [0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.02, 0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025, 0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.025, 0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.04,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.01, 0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.015]

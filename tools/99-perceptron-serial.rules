@@ -1,0 +1,24 @@
+# Stable names for the two serial devices on the robot.
+#
+# Install with:
+#     sudo cp tools/99-perceptron-serial.rules /etc/udev/rules.d/
+#     sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Both the D500 lidar and the STM32 ECU use a Silicon Labs CP2102, so they
+# present the SAME 10c4:ea60 vendor/product pair. Matching on vendor/product
+# alone gives whichever enumerated first the symlink and leaves the other
+# without one -- and ttyUSB numbering is not stable across replug, so the
+# lidar can come up as ttyUSB1 and the ECU as ttyUSB0 on the next boot.
+# Pointing the STM32 bridge at the lidar is a confusing failure: the port
+# opens, bytes arrive, and nothing ever decodes.
+#
+# The two are told apart by USB iSerialNumber. The lidar's adapter reports
+# "0001"; the ECU's adapter reports none, so it falls through to the second
+# rule. If you swap adapters, re-check with:
+#     udevadm info -q property -n /dev/ttyUSB0 | grep ID_SERIAL_SHORT
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="0001", MODE:="0666", GROUP:="dialout", SYMLINK+="ldlidar"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}!="0001", MODE:="0666", GROUP:="dialout", SYMLINK+="stm32"
+
+# CH340 variant of the lidar adapter, shipped in some D500 batches.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", MODE:="0666", GROUP:="dialout", SYMLINK+="ldlidar"

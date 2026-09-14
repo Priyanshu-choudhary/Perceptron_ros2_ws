@@ -1,0 +1,88 @@
+# robot_localization EKF with NO IMU. Wheel encoders only.
+#
+# Used by robot.launch.py imu:=false, as the A/B against ekf_real.yaml.
+#
+# THE ONE CHANGE THAT MATTERS
+# ekf_real.yaml takes vx from the wheels and vyaw from the gyro. With the gyro
+# gone, vyaw has to come from the wheels too, so odom0_config turns it on. That
+# single flag is the whole difference; without it the filter has no yaw input
+# at all and the robot slides around the map without ever turning, which looks
+# like a broken transform rather than a missing sensor.
+#
+# WHAT THIS BUYS AND WHAT IT COSTS
+#
+#   better  No gyro bias, so no drift while parked and no random walk. Heading
+#           is exactly zero when the wheels are still -- the same guarantee the
+#           yaw ZUPT was added to recover on the IMU path, except here it is
+#           free rather than bolted on.
+#
+#   worse   Every turn is measured by differencing two wheel speeds, and a
+#           4-wheel skid-steer scrubs its tyres sideways through every one of
+#           them. The error is systematic, not noise: it does not average out
+#           over a long run, and it changes with surface, load and turn rate.
+#           Carpet and tile give different answers for the same command.
+#
+# So this configuration is steadier standing still and worse at knowing where
+# it is pointing after it moves. Which matters more is an empirical question --
+# tools/turn_test.py answers it directly by reporting estimated against
+# physical for both configurations.
+#
+# The wheel yaw rate comes from stm32_bridge_node as
+# (vel_r - vel_l) / wheel_separation, with wheel_separation hardcoded at
+# 0.416 m. On a skid-steer the EFFECTIVE separation is wider than the physical
+# track because the tyres scrub, so if turns come out consistently short,
+# that constant is the thing to raise.
+
+ekf_filter_node:
+  ros__parameters:
+    use_sim_time: false
+
+    frequency: 25.0
+    sensor_timeout: 0.2
+    two_d_mode: true
+    publish_tf: true
+    publish_acceleration: false
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom
+
+    # Order of the 15 flags is:
+    #   x     y     z
+    #   roll  pitch yaw
+    #   vx    vy    vz
+    #   vroll vpitch vyaw
+    #   ax    ay    az
+
+    # vx AND vyaw, both from the wheels. Compare with ekf_real.yaml, where
+    # vyaw is false here and supplied by imu0 instead.
+    odom0: /odom
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  false, false,
+                   false, false, true,
+                   false, false, false]
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+
+    # No imu0 at all. Leaving one configured while nothing publishes to it does
+    # not fail loudly -- robot_localization simply waits, and the only symptom
+    # is a filter that feels sluggish for reasons nothing reports.
+
+    process_noise_covariance: [0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.02, 0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025, 0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.025, 0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.04,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.01, 0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.015]

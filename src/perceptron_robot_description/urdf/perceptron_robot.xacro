@@ -1,0 +1,520 @@
+<?xml version="1.0" ?>
+<!--
+  Perceptron differential (skid-steer) drive robot.
+
+  Frame conventions, REP-103.
+    base_footprint sits on the ground at the centre of the 4-wheel rectangle,
+    +X forward and +Y left. base_link shares its X/Y, raised to axle height.
+
+  All dimensions below were measured from the exported STL meshes, so the
+  visual meshes, the collision primitives and the joint frames all agree.
+  The meshes are exported in the Fusion assembly frame, hence the large
+  constant offsets in every visual origin. Do not "simplify" them away.
+
+  ! Keep comments free of a colon followed by a space, and of a line that
+  ! starts with a dash and a space. gazebo_ros2_control on Humble hands this
+  ! whole document to rcl as a robot_description parameter override, which is
+  ! parsed as a YAML scalar. Either sequence aborts that parse with
+  ! "Couldn't parse parameter override rule", and then no controller_manager
+  ! ever appears and both spawners time out.
+-->
+<robot name="perceptron_robot" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:include filename="$(find perceptron_robot_description)/urdf/materials.xacro" />
+
+  <xacro:arg name="is_sim" default="true"/>
+  <xacro:arg name="gazebo_controllers" default="$(find perceptron_robot_control)/config/controllers.yaml"/>
+  <!-- true swaps the ~340k-triangle meshes for primitives (much faster on WSL software GL) -->
+  <xacro:arg name="simple_visuals" default="false"/>
+
+  <!--
+    Which scanner is fitted.
+      2d    LDROBOT D500, one horizontal plane, publishes /scan       (the default)
+      3d    16-beam spinning lidar, pitched down, publishes /points
+      both  both sensors, for comparing them or for running Nav2 on /scan
+            while terrain perception is developed on /points
+
+    A 2D scanner at a fixed height cannot see a crater. It scans straight over
+    the hole and reports whatever is beyond it, so a negative obstacle is
+    invisible no matter how deep. Detecting one needs beams that strike the
+    ground ahead of the robot, which is what the downward tilt is for.
+  -->
+  <!--
+    Which camera is fitted.
+      mono    one RGB camera, /camera/image_raw                 (the default)
+      stereo  a left/right pair, /stereo/left|right/image_raw
+      depth   an RGBD unit, /depth_camera/points as a cloud
+
+    In every mode the mono stream stays on /camera/image_raw, because the ArUco
+    docking pipeline subscribes to it. Swapping the sensor should not silently
+    break docking; in stereo mode the LEFT camera carries that topic, in depth
+    mode the RGB stream does.
+
+    stereo versus depth is a real trade, not a preference. `stereo` gives two
+    genuine images and you run stereo matching yourself, which is what a VIO
+    front end wants and what the real robot will face. `depth` reads the depth
+    buffer straight out of the renderer: far cheaper, and it hands you a clean
+    point cloud, but it cannot reproduce the failure that matters most on a
+    lunar surface, where fine uniform sand gives stereo matching almost no
+    texture to correlate.
+  -->
+  <!--
+    Wheel collision shape.
+      cylinder  physically right, and the default on flat ground
+      sphere    same radius, for heightmap terrain
+
+    ODE's heightfield collider handles spheres well and cylinders badly: a
+    cylinder resting on a heightfield can put the solver into a state where
+    gzserver stops advancing altogether. The symptom is not a crash or an error,
+    it is gzserver stopping part-way through loading gazebo_ros2_control, after
+    which no sensor publishes and every controller spawner times out.
+
+    A sphere of the wheel radius rolls identically for a differential drive; it
+    only narrows the contact patch, which on loose sand is not a meaningful
+    difference.
+  -->
+  <xacro:arg name="wheel_collision" default="cylinder"/>
+  <xacro:property name="wheel_collision" value="$(arg wheel_collision)"/>
+
+  <xacro:arg name="camera_type" default="mono"/>
+  <xacro:property name="camera_type" value="$(arg camera_type)"/>
+  <xacro:property name="want_stereo" value="${camera_type == 'stereo'}"/>
+  <xacro:property name="want_depth" value="${camera_type == 'depth'}"/>
+  <!-- Stereo baseline in metres. Depth resolution scales with it; 0.12 m is
+       typical for a small robot and resolves the 40-50 cm craters here. -->
+  <xacro:arg name="stereo_baseline" default="0.12"/>
+  <xacro:property name="stereo_baseline" value="$(arg stereo_baseline)"/>
+
+  <xacro:arg name="lidar_type" default="2d"/>
+  <!-- Downward tilt of the 3D scanner, radians. 0.26 rad is 15 degrees. Ignored
+       in 2d mode, where tilting the plane would only shorten the useful range. -->
+  <xacro:arg name="lidar_pitch" default="0.26"/>
+
+  <xacro:property name="lidar_type" value="$(arg lidar_type)"/>
+  <xacro:property name="lidar_pitch" value="$(arg lidar_pitch)"/>
+  <xacro:property name="want_2d" value="${lidar_type == '2d' or lidar_type == 'both'}"/>
+  <xacro:property name="want_3d" value="${lidar_type == '3d' or lidar_type == 'both'}"/>
+
+  <xacro:property name="simple_visuals" value="$(arg simple_visuals)"/>
+
+  <!-- ==================== MEASURED GEOMETRY ==================== -->
+  <!-- tyre.stl is a 125 mm dia x 57.9 mm wide cylinder -->
+  <xacro:property name="wheel_radius" value="0.0625"/>
+  <xacro:property name="wheel_width"  value="0.0579"/>
+
+  <!-- Half wheelbase / half track, from the original joint origins re-centred -->
+  <xacro:property name="wheel_x" value="0.10774"/>
+  <xacro:property name="wheel_y" value="0.18881"/>
+
+  <!-- base_link.stl bbox: x[-0.10695,0.308] y[-0.06958,0.383] z[0,0.111] -->
+  <!-- Offset moving the mesh frame onto base_link (wheel-rectangle centre, axle height) -->
+  <xacro:property name="mx" value="-0.11186"/>
+  <xacro:property name="my" value="-0.15119"/>
+  <xacro:property name="mz" value="-0.03140"/>
+
+  <!-- ==================== LIDAR MOUNT ==================== -->
+  <!--
+    LDROBOT D500 (LD19 / STL-19P family). Approximate body, exact scan plane.
+    Mounted on a short post over the robot's rotation centre, which is the one
+    placement decision that matters for 2D SLAM: with the scanner on the centre
+    of rotation, turning on the spot produces no lidar translation, so scan
+    matching stays well conditioned. Off-centre mounting is the usual reason a
+    map smears every time the robot spins.
+
+    The scan plane must also clear the camera, whose body tops out at 0.1821 m
+    above the ground. lidar_z below is in base_link, so add wheel_radius for the
+    height above the floor: 0.1475 + 0.0625 = 0.21 m.
+    Change lidar_z / lidar_x / lidar_y to match where you actually bolt it on.
+  -->
+  <xacro:property name="lidar_x" value="0.0"/>
+  <xacro:property name="lidar_y" value="0.0"/>
+  <xacro:property name="lidar_z" value="0.1475"/>
+  <xacro:property name="lidar_body_r" value="0.0298"/>
+  <xacro:property name="lidar_body_h" value="0.0400"/>
+  <!-- scan plane sits this far above the underside of the sensor body -->
+  <xacro:property name="lidar_plane_above_base" value="0.0245"/>
+  <xacro:property name="chassis_top_z" value="0.0796"/>
+
+  <!-- ==================== WHEEL MACRO ==================== -->
+  <!--
+    One rigid link per wheel (rim + tyre fused, as they are on the real robot).
+    Collision is a cylinder: a mesh collision on a spinning body, offset 0.22 m
+    from its own joint, is what made the old model throw a wheel on spawn.
+    Spin axis is +Y on every wheel, so a positive joint velocity is "forward"
+    on both sides - which is what diff_drive_controller assumes.
+  -->
+  <xacro:macro name="wheel" params="name x y">
+    <link name="${name}_wheel">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.71244"/>
+        <!-- solid cylinder, spin axis = Y -->
+        <inertia ixx="0.00089543" iyy="0.00139148" izz="0.00089543"
+                 ixy="0.0" iyz="0.0" ixz="0.0"/>
+      </inertial>
+
+      <xacro:if value="${simple_visuals}">
+        <visual name="${name}_wheel_visual">
+          <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+          <geometry>
+            <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+          </geometry>
+          <material name="black"/>
+        </visual>
+      </xacro:if>
+
+      <xacro:unless value="${simple_visuals}">
+        <!-- tyre.stl centre is at (0.700, -0.175, 0) in mesh coords; Rz(90) maps mesh +X onto link +Y -->
+        <visual name="${name}_tyre_visual">
+          <origin xyz="-0.175 -0.7 0" rpy="0 0 1.57079632679"/>
+          <geometry>
+            <mesh filename="package://perceptron_robot_description/meshes/tyre.stl" scale="0.001 0.001 0.001"/>
+          </geometry>
+          <material name="black"/>
+        </visual>
+        <!-- rim_1.stl centre is at (0.7007, -0.175, 0) -->
+        <visual name="${name}_rim_visual">
+          <origin xyz="-0.175 -0.7007 0" rpy="0 0 1.57079632679"/>
+          <geometry>
+            <mesh filename="package://perceptron_robot_description/meshes/rim_1.stl" scale="0.001 0.001 0.001"/>
+          </geometry>
+          <material name="silver"/>
+        </visual>
+      </xacro:unless>
+
+      <collision name="${name}_wheel_collision">
+        <origin xyz="0 0 0" rpy="1.57079632679 0 0"/>
+        <geometry>
+          <xacro:if value="${wheel_collision == 'sphere'}">
+            <sphere radius="${wheel_radius}"/>
+          </xacro:if>
+          <xacro:unless value="${wheel_collision == 'sphere'}">
+            <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+          </xacro:unless>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${name}" type="continuous">
+      <origin xyz="${x} ${y} 0" rpy="0 0 0"/>
+      <parent link="base_link"/>
+      <child link="${name}_wheel"/>
+      <axis xyz="0 1 0"/>
+      <limit effort="12.0" velocity="25.0"/>
+      <dynamics damping="0.02" friction="0.01"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- ==================== BASE ==================== -->
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="-0.009505 0.006496 0.003913" rpy="0 0 0"/>
+      <mass value="5.2832"/>
+      <inertia ixx="0.084731" iyy="0.132613" izz="0.201957"
+               ixy="-0.000161" iyz="0.000101" ixz="-1.12e-07"/>
+    </inertial>
+
+    <xacro:if value="${simple_visuals}">
+      <visual name="base_link_visual">
+        <origin xyz="-0.01134 0.00552 0.0241" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.4150 0.4526 0.1110"/>
+        </geometry>
+        <material name="silver"/>
+      </visual>
+    </xacro:if>
+
+    <xacro:unless value="${simple_visuals}">
+      <visual name="base_link_visual">
+        <origin xyz="${mx} ${my} ${mz}" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://perceptron_robot_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="silver"/>
+      </visual>
+    </xacro:unless>
+
+    <!-- Box collision rather than the 24k-triangle mesh, because ODE is far
+         happier with it and it is indistinguishable for a docking scenario. -->
+    <collision name="base_link_collision">
+      <origin xyz="-0.01134 0.00552 0.0241" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.4150 0.4526 0.1110"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- ==================== WHEELS ==================== -->
+  <xacro:wheel name="left_front"  x="${wheel_x}"  y="${wheel_y}"/>
+  <xacro:wheel name="right_front" x="${wheel_x}"  y="${-wheel_y}"/>
+  <xacro:wheel name="left_back"   x="${-wheel_x}" y="${wheel_y}"/>
+  <xacro:wheel name="right_back"  x="${-wheel_x}" y="${-wheel_y}"/>
+
+  <!-- ==================== IMU ==================== -->
+  <link name="imu_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0157"/>
+      <inertia ixx="5.56e-07" iyy="5.56e-07" izz="1.05e-06" ixy="0" iyz="0" ixz="0"/>
+    </inertial>
+    <xacro:unless value="${simple_visuals}">
+      <visual name="imu_visual">
+        <origin xyz="-0.0866207 -0.1577983 -0.0225" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://perceptron_robot_description/meshes/IMU.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="blue"/>
+      </visual>
+    </xacro:unless>
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <origin xyz="-0.0252393 0.0066083 -0.0089" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+  </joint>
+
+  <!-- ==================== CAMERA ==================== -->
+  <!--
+    camera.stl bbox in mesh coords is x[0.285,0.305] y[0.120,0.210] z[0.111,0.151],
+    a 20 x 90 x 40 mm body sitting on the front edge of the chassis.
+    camera_link has +X pointing out of the lens (Gazebo convention) and +Z up.
+    The old model had rpy="-pi -pi/2 0" here, which aimed the lens at the sky.
+  -->
+  <link name="camera_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0652"/>
+      <inertia ixx="5.0e-05" iyy="1.2e-05" izz="5.0e-05" ixy="0" iyz="0" ixz="0"/>
+    </inertial>
+    <xacro:unless value="${simple_visuals}">
+      <visual name="camera_visual">
+        <origin xyz="-0.295 -0.165 -0.131" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://perceptron_robot_description/meshes/camera.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="red"/>
+      </visual>
+    </xacro:unless>
+    <xacro:if value="${simple_visuals}">
+      <visual name="camera_visual">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.020 0.090 0.040"/>
+        </geometry>
+        <material name="red"/>
+      </visual>
+    </xacro:if>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <origin xyz="0.18314 0.01381 0.0996" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+  </joint>
+
+  <!-- Stereo pair. Mounted either side of the mono camera, looking the same way. -->
+  <xacro:if value="${want_stereo}">
+    <link name="stereo_left_link"/>
+    <joint name="stereo_left_joint" type="fixed">
+      <origin xyz="0 ${stereo_baseline/2} 0" rpy="0 0 0"/>
+      <parent link="camera_link"/>
+      <child link="stereo_left_link"/>
+    </joint>
+    <link name="stereo_left_optical_link"/>
+    <joint name="stereo_left_optical_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
+      <parent link="stereo_left_link"/>
+      <child link="stereo_left_optical_link"/>
+    </joint>
+
+    <link name="stereo_right_link"/>
+    <joint name="stereo_right_joint" type="fixed">
+      <origin xyz="0 ${-stereo_baseline/2} 0" rpy="0 0 0"/>
+      <parent link="camera_link"/>
+      <child link="stereo_right_link"/>
+    </joint>
+    <link name="stereo_right_optical_link"/>
+    <joint name="stereo_right_optical_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
+      <parent link="stereo_right_link"/>
+      <child link="stereo_right_optical_link"/>
+    </joint>
+  </xacro:if>
+
+  <!-- RGBD unit. Shares camera_link, its own optical frame for the cloud. -->
+  <xacro:if value="${want_depth}">
+    <link name="depth_camera_optical_link"/>
+    <joint name="depth_camera_optical_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
+      <parent link="camera_link"/>
+      <child link="depth_camera_optical_link"/>
+    </joint>
+  </xacro:if>
+
+  <!-- REP-103 optical frame, +Z out of the lens, +X right, +Y down -->
+  <link name="camera_optical_link"/>
+
+  <joint name="camera_optical_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
+    <parent link="camera_link"/>
+    <child link="camera_optical_link"/>
+  </joint>
+
+  <!-- ==================== LIDAR ==================== -->
+  <!--
+    laser_link sits ON the scan plane, +X forward, +Z up, which is what
+    sensor_msgs/LaserScan assumes, with angle 0 at +X increasing towards +Y.
+    Nav2 and slam_toolbox both take the scan straight from this frame, so an
+    error here shows up as a map rotated against the robot.
+  -->
+  <link name="laser_link">
+    <inertial>
+      <origin xyz="0 0 ${-lidar_plane_above_base + lidar_body_h/2}" rpy="0 0 0"/>
+      <mass value="0.19"/>
+      <inertia ixx="6.0e-05" iyy="6.0e-05" izz="8.4e-05" ixy="0" iyz="0" ixz="0"/>
+    </inertial>
+    <visual name="laser_body_visual">
+      <origin xyz="0 0 ${-lidar_plane_above_base + lidar_body_h/2}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${lidar_body_r}" length="${lidar_body_h}"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision name="laser_body_collision">
+      <origin xyz="0 0 ${-lidar_plane_above_base + lidar_body_h/2}" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="${lidar_body_r}" length="${lidar_body_h}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="laser_joint" type="fixed">
+    <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="laser_link"/>
+  </joint>
+
+  <!--
+    3D scanner. Its own frame, pitched down by lidar_pitch, so that both
+    scanners can be fitted at once and so the costmap configuration can name
+    one or the other without ambiguity.
+
+    Mounted above the 2D unit: the higher the scanner, the steeper its beams
+    strike the ground, and the more of a crater's far wall it can see. At 0.26 m
+    with a 15 degree tilt the beam pattern sweeps the sand from roughly 0.6 m to
+    4 m ahead, which covers the stopping distance at the speeds Nav2 uses here.
+  -->
+  <xacro:if value="${want_3d}">
+    <link name="lidar3d_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.27"/>
+        <inertia ixx="1.4e-04" iyy="1.4e-04" izz="1.6e-04" ixy="0" iyz="0" ixz="0"/>
+      </inertial>
+      <visual name="lidar3d_visual">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.0380" length="0.0720"/>
+        </geometry>
+        <material name="blue"/>
+      </visual>
+      <collision name="lidar3d_collision">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.0380" length="0.0720"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="lidar3d_joint" type="fixed">
+      <origin xyz="${lidar_x} ${lidar_y} ${lidar_z + 0.075}" rpy="0 ${lidar_pitch} 0"/>
+      <parent link="base_link"/>
+      <child link="lidar3d_link"/>
+    </joint>
+  </xacro:if>
+
+  <!-- Post carrying the lidar up clear of the camera -->
+  <link name="lidar_post_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="1.0e-05" iyy="1.0e-05" izz="1.0e-05" ixy="0" iyz="0" ixz="0"/>
+    </inertial>
+    <visual name="lidar_post_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.018"
+                  length="${lidar_z - lidar_plane_above_base - chassis_top_z}"/>
+      </geometry>
+      <material name="silver"/>
+    </visual>
+  </link>
+
+  <joint name="lidar_post_joint" type="fixed">
+    <origin xyz="${lidar_x} ${lidar_y}
+                 ${(chassis_top_z + lidar_z - lidar_plane_above_base) / 2}" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="lidar_post_link"/>
+  </joint>
+
+  <!-- ==================== ROS 2 CONTROL ==================== -->
+  <xacro:macro name="drive_joints">
+    <joint name="left_front">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="left_back">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="right_front">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="right_back">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:if value="$(arg is_sim)">
+    <xacro:include filename="$(find perceptron_robot_description)/urdf/perceptron_robot.gazebo" />
+
+    <ros2_control name="gazebo_ros2_control" type="system">
+      <hardware>
+        <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+      </hardware>
+      <xacro:drive_joints/>
+    </ros2_control>
+
+    <gazebo>
+      <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+        <parameters>$(arg gazebo_controllers)</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+  <xacro:unless value="$(arg is_sim)">
+    <ros2_control name="mock_robot" type="system">
+      <hardware>
+        <plugin>mock_components/GenericSystem</plugin>
+        <param name="calculate_dynamics">true</param>
+      </hardware>
+      <xacro:drive_joints/>
+    </ros2_control>
+  </xacro:unless>
+
+</robot>

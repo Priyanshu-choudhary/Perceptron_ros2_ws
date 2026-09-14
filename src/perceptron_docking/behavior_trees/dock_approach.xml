@@ -1,0 +1,42 @@
+<!--
+  The behaviour tree the docking controller asks for by name when it sends its
+  pre-dock goal (NavigateToPose has a per-goal `behavior_tree` field).
+
+  It differs from the stock tree in exactly one attribute: planner_id is
+  GridBasedUnknown, so the approach may cross floor the lidar has not swept yet.
+  Without that no off-axis approach can be planned at all - see nav2_params.yaml.
+
+  Goal tolerance is deliberately the ordinary one. Nav2 only has to get the
+  robot NEAR the pre-dock pose; the docking controller's ALIGNING step does the
+  placement, because the last half metre is a sideways shuffle onto the dock
+  axis and no trajectory controller on a differential base does that well.
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBasedUnknown"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Spin spin_dist="1.57"/>
+          <Wait wait_duration="5"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

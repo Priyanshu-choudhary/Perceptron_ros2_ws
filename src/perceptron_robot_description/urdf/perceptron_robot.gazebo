@@ -1,0 +1,321 @@
+<?xml version="1.0" ?>
+<robot name="perceptron_robot" xmlns:xacro="http://www.ros.org/wiki/xacro" >
+
+<!--
+  Skid-steer friction model.
+  fdir1 is the rolling direction of the wheel (its local +X, because the wheel
+  spins about +Y). mu1 acts along fdir1, mu2 across it. Making mu2 small is what
+  lets a 4-wheel skid-steer rotate instead of juddering and hopping.
+-->
+<xacro:macro name="wheel_gazebo" params="name">
+  <gazebo reference="${name}_wheel">
+    <material>Gazebo/FlatBlack</material>
+    <mu1>1.0</mu1>
+    <mu2>0.2</mu2>
+    <fdir1>1 0 0</fdir1>
+    <kp>500000.0</kp>
+    <kd>10.0</kd>
+    <minDepth>0.001</minDepth>
+    <maxVel>0.1</maxVel>
+    <selfCollide>false</selfCollide>
+  </gazebo>
+</xacro:macro>
+
+<xacro:wheel_gazebo name="left_front"/>
+<xacro:wheel_gazebo name="right_front"/>
+<xacro:wheel_gazebo name="left_back"/>
+<xacro:wheel_gazebo name="right_back"/>
+
+<gazebo reference="base_link">
+  <material>Gazebo/DarkGrey</material>
+  <mu1>0.2</mu1>
+  <mu2>0.2</mu2>
+  <selfCollide>false</selfCollide>
+  <gravity>true</gravity>
+</gazebo>
+
+<!-- ==================== CAMERA ==================== -->
+<!--
+  The sensor looks down camera_link's +X. camera_link is now oriented so that
+  +X is straight ahead, so this actually sees the dock.
+  frame_name is the REP-103 optical frame, which is what solvePnP output is
+  expressed in, so the ArUco node's TF maths lines up without a fudge factor.
+  Comment style note, see perceptron_robot.xacro. No colon-space, no leading dash.
+-->
+<xacro:unless value="${want_stereo or want_depth}">
+<gazebo reference="camera_link">
+  <material>Gazebo/Red</material>
+  <sensor type="camera" name="usb_camera">
+    <always_on>true</always_on>
+    <update_rate>30.0</update_rate>
+    <visualize>false</visualize>
+    <camera name="head">
+      <horizontal_fov>1.3962634</horizontal_fov>
+      <image>
+        <!--
+          Sized against two limits at once. Detection needs roughly 4 px per
+          marker module, so a 0.15 m marker at 2 m seen 40 deg off-axis has to
+          land around 28 px wide; 800x600 with an 80 deg horizontal field of
+          view gives exactly that, where the original 640x480 gave ~15 px and
+          the dock simply vanished mid-approach, leaving the robot circling.
+          The other limit is bandwidth. Raw images are not compressed, so
+          1280x960 at 15 Hz is 55 MB/s through the middleware, which on a 4 GB
+          WSL VM starves the rest of the graph. 800x600 at 10 Hz is 14 MB/s,
+          and 10 Hz is ample for a 0.07 m/s final approach (7 mm per frame).
+          Keep the 4:3 aspect, because the vertical field of view limits how
+          close the robot can get and still see the whole marker.
+        -->
+        <width>800</width>
+        <height>600</height>
+        <format>R8G8B8</format>
+      </image>
+      <clip>
+        <near>0.02</near>
+        <far>50</far>
+      </clip>
+      <noise>
+        <type>gaussian</type>
+        <mean>0.0</mean>
+        <stddev>0.005</stddev>
+      </noise>
+    </camera>
+    <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+      <ros>
+        <namespace>/</namespace>
+        <remapping>~/image_raw:=/camera/image_raw</remapping>
+        <remapping>~/camera_info:=/camera/camera_info</remapping>
+      </ros>
+      <camera_name>camera</camera_name>
+      <frame_name>camera_optical_link</frame_name>
+    </plugin>
+  </sensor>
+</gazebo>
+</xacro:unless>
+
+<!-- ==================== STEREO PAIR ==================== -->
+<!--
+  A multicamera sensor renders both eyes in lockstep, which is what makes the
+  pair usable for matching: two separate camera sensors would be captured at
+  slightly different simulation times and the disparity would carry that error.
+
+  The LEFT camera also publishes /camera/image_raw so the ArUco docking pipeline
+  keeps working when this mode is selected.
+-->
+<xacro:if value="${want_stereo}">
+<gazebo reference="camera_link">
+  <sensor name="stereo_camera" type="multicamera">
+    <always_on>true</always_on>
+    <update_rate>30.0</update_rate>
+    <visualize>false</visualize>
+    <camera name="left">
+      <pose>0 ${stereo_baseline/2} 0 0 0 0</pose>
+      <horizontal_fov>1.3962634</horizontal_fov>
+      <image><width>800</width><height>600</height><format>R8G8B8</format></image>
+      <clip><near>0.05</near><far>30</far></clip>
+      <noise><type>gaussian</type><mean>0.0</mean><stddev>0.005</stddev></noise>
+    </camera>
+    <camera name="right">
+      <pose>0 ${-stereo_baseline/2} 0 0 0 0</pose>
+      <horizontal_fov>1.3962634</horizontal_fov>
+      <image><width>800</width><height>600</height><format>R8G8B8</format></image>
+      <clip><near>0.05</near><far>30</far></clip>
+      <noise><type>gaussian</type><mean>0.0</mean><stddev>0.005</stddev></noise>
+    </camera>
+    <plugin name="stereo_controller" filename="libgazebo_ros_camera.so">
+      <ros>
+        <namespace>/</namespace>
+        <remapping>stereo/left/image_raw:=/camera/image_raw</remapping>
+        <remapping>stereo/left/camera_info:=/camera/camera_info</remapping>
+      </ros>
+      <camera_name>stereo</camera_name>
+      <frame_name>stereo_left_optical_link</frame_name>
+      <hack_baseline>${stereo_baseline}</hack_baseline>
+    </plugin>
+  </sensor>
+</gazebo>
+</xacro:if>
+
+<!-- ==================== RGBD ==================== -->
+<!--
+  Reads the renderer's depth buffer, so it produces a clean cloud for almost no
+  CPU. Resolution is deliberately modest: a 424x240 cloud at 10 Hz is 100k
+  points per second, which the traversability grid can consume in real time.
+  Its RGB stream carries /camera/image_raw so ArUco docking still works.
+-->
+<xacro:if value="${want_depth}">
+<gazebo reference="camera_link">
+  <sensor name="depth_camera" type="depth">
+    <always_on>true</always_on>
+    <update_rate>30.0</update_rate>
+    <visualize>false</visualize>
+    <camera name="depth">
+      <horizontal_fov>1.3962634</horizontal_fov>
+      <image><width>424</width><height>240</height><format>R8G8B8</format></image>
+      <clip><near>0.10</near><far>10.0</far></clip>
+      <noise><type>gaussian</type><mean>0.0</mean><stddev>0.007</stddev></noise>
+    </camera>
+    <plugin name="depth_camera_controller" filename="libgazebo_ros_camera.so">
+      <ros>
+        <namespace>/</namespace>
+        <remapping>depth_camera/image_raw:=/camera/image_raw</remapping>
+        <remapping>depth_camera/camera_info:=/camera/camera_info</remapping>
+      </ros>
+      <camera_name>depth_camera</camera_name>
+      <frame_name>depth_camera_optical_link</frame_name>
+      <min_depth>0.10</min_depth>
+      <max_depth>10.0</max_depth>
+    </plugin>
+  </sensor>
+</gazebo>
+</xacro:if>
+
+<!-- ==================== LIDAR ==================== -->
+<!--
+  LDROBOT D500 (LD19 / STL-19P). Datasheet figures, so the simulated scan has
+  the same limits the real one will.
+    range        0.03 to 12 m, +/-45 mm accuracy  (min raised to 0.05 for margin)
+    scan rate    10 Hz
+    sampling     5000 Hz  =>  500 points per revolution
+  type is "ray" and not "gpu_ray" on purpose, because CPU ray casting works
+  under WSL software GL, where gpu_ray silently produces no data.
+-->
+<xacro:if value="${want_2d}">
+<gazebo reference="laser_link">
+  <material>Gazebo/FlatBlack</material>
+  <sensor name="ldrobot_d500" type="ray">
+    <pose>0 0 0 0 0 0</pose>
+    <always_on>true</always_on>
+    <update_rate>10.0</update_rate>
+    <visualize>false</visualize>
+    <ray>
+      <scan>
+        <horizontal>
+          <samples>500</samples>
+          <resolution>1</resolution>
+          <min_angle>-3.14159265</min_angle>
+          <max_angle>3.14159265</max_angle>
+        </horizontal>
+      </scan>
+      <range>
+        <min>0.05</min>
+        <max>12.0</max>
+        <resolution>0.01</resolution>
+      </range>
+      <noise>
+        <type>gaussian</type>
+        <mean>0.0</mean>
+        <stddev>0.015</stddev>
+      </noise>
+    </ray>
+    <plugin name="lidar_controller" filename="libgazebo_ros_ray_sensor.so">
+      <ros>
+        <namespace>/</namespace>
+        <remapping>~/out:=/scan</remapping>
+      </ros>
+      <output_type>sensor_msgs/LaserScan</output_type>
+      <frame_name>laser_link</frame_name>
+    </plugin>
+  </sensor>
+</gazebo>
+</xacro:if>
+
+<!-- ==================== 3D LIDAR ==================== -->
+<!--
+  A 16-beam spinning scanner, pitched down by lidar_pitch, publishing
+  sensor_msgs/PointCloud2 on /points.
+
+  Sized for what this arena needs rather than for a datasheet. 512 x 16 = 8192
+  rays at 10 Hz is 82k rays per second of CPU ray casting; a real 64-beam unit
+  at 20 Hz would be twenty times that and would not run alongside Gazebo on a
+  4 GB VM.
+
+  The vertical span runs from -20 to +10 degrees about the sensor's own axis.
+  With the 15 degree downward mount that puts the beam fan between roughly -35
+  and -5 degrees below horizontal, so the sand is struck from about 0.4 m out to
+  well beyond the arena, and the topmost beams still catch boulders standing
+  proud of it.
+
+  type is "ray" and not "gpu_ray": CPU casting works headless and under WSL
+  software GL, where gpu_ray silently produces nothing.
+-->
+<xacro:if value="${want_3d}">
+<gazebo reference="lidar3d_link">
+  <material>Gazebo/Blue</material>
+  <sensor name="lidar3d" type="ray">
+    <pose>0 0 0 0 0 0</pose>
+    <always_on>true</always_on>
+    <update_rate>10.0</update_rate>
+    <visualize>false</visualize>
+    <ray>
+      <scan>
+        <horizontal>
+          <samples>512</samples>
+          <resolution>1</resolution>
+          <min_angle>-3.14159265</min_angle>
+          <max_angle>3.14159265</max_angle>
+        </horizontal>
+        <vertical>
+          <samples>16</samples>
+          <resolution>1</resolution>
+          <min_angle>-0.34906585</min_angle>
+          <max_angle>0.17453293</max_angle>
+        </vertical>
+      </scan>
+      <range>
+        <min>0.15</min>
+        <max>20.0</max>
+        <resolution>0.01</resolution>
+      </range>
+      <noise>
+        <type>gaussian</type>
+        <mean>0.0</mean>
+        <stddev>0.012</stddev>
+      </noise>
+    </ray>
+    <plugin name="lidar3d_controller" filename="libgazebo_ros_ray_sensor.so">
+      <ros>
+        <namespace>/</namespace>
+        <remapping>~/out:=/points</remapping>
+      </ros>
+      <output_type>sensor_msgs/PointCloud2</output_type>
+      <frame_name>lidar3d_link</frame_name>
+    </plugin>
+  </sensor>
+</gazebo>
+</xacro:if>
+
+<gazebo reference="lidar_post_link">
+  <material>Gazebo/Grey</material>
+</gazebo>
+
+<!-- ==================== IMU ==================== -->
+<gazebo reference="imu_link">
+  <material>Gazebo/Blue</material>
+  <sensor name="imu_sensor" type="imu">
+    <always_on>true</always_on>
+    <update_rate>100</update_rate>
+    <visualize>false</visualize>
+    <imu>
+      <angular_velocity>
+        <x><noise type="gaussian"><mean>0.0</mean><stddev>2e-4</stddev></noise></x>
+        <y><noise type="gaussian"><mean>0.0</mean><stddev>2e-4</stddev></noise></y>
+        <z><noise type="gaussian"><mean>0.0</mean><stddev>2e-4</stddev></noise></z>
+      </angular_velocity>
+      <linear_acceleration>
+        <x><noise type="gaussian"><mean>0.0</mean><stddev>1.7e-2</stddev></noise></x>
+        <y><noise type="gaussian"><mean>0.0</mean><stddev>1.7e-2</stddev></noise></y>
+        <z><noise type="gaussian"><mean>0.0</mean><stddev>1.7e-2</stddev></noise></z>
+      </linear_acceleration>
+    </imu>
+    <plugin name="imu_plugin" filename="libgazebo_ros_imu_sensor.so">
+      <ros>
+        <namespace>/</namespace>
+        <remapping>~/out:=/imu/data_raw</remapping>
+      </ros>
+      <initial_orientation_as_reference>false</initial_orientation_as_reference>
+      <frame_name>imu_link</frame_name>
+    </plugin>
+  </sensor>
+</gazebo>
+
+</robot>

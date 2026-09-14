@@ -1,0 +1,50 @@
+# Battery monitor configuration.
+#
+# The pack is described per CELL where LiPo is conventionally specified that
+# way, and per pack where the hardware is. A 3S pack at 3.50 V/cell is 10.5 V
+# at the terminals; quoting the threshold per cell is what lets you swap to a
+# 4S pack by changing one number.
+
+battery_node:
+  ros__parameters:
+    use_sim_time: true
+
+    # --- pack description ---
+    cell_count: 3                     # 3S
+    design_capacity: 5.0              # Ah
+    internal_resistance: 0.05         # ohm, whole pack; used to undo load sag
+    serial_number: "SIM-3S-0001"
+    location: "chassis_bay"
+    frame_id: "base_link"
+
+    # --- simulated measurements; change any of these live with ros2 param set
+    simulate: true
+    voltage: 12.0                     # V at the terminals (~75% for 3S)
+    current: -2.5                     # A. NEGATIVE while discharging, per ROS convention
+    temperature: 25.0                 # degrees C
+    present: true
+
+    # --- optional drain, off by default so values stay constant ---
+    simulate_discharge: false
+    discharge_minutes_to_empty: 30.0
+
+    # --- thresholds ---
+    # "Head for the dock" is a question about remaining charge, so it is a
+    # percentage. Volts per cell reads like the natural unit and is a trap: the
+    # LiPo curve is nearly flat from 3.7 to 4.0 V and then collapses, so
+    # 3.50 V/cell is 3.4% charge, not a comfortable margin.
+    low_battery_percentage: 0.25      # start heading for the dock
+    critical_battery_percentage: 0.10 # abandon the mission
+    # Cell protection, on the MEASURED terminal voltage, sag included, because
+    # sag under load is what damages cells.
+    critical_cell_voltage: 3.30       # 9.90 V on a 3S pack
+    full_cell_voltage: 4.20           # 12.60 V
+    max_cell_voltage: 4.25            # above this, report OVERVOLTAGE
+    min_cell_voltage: 3.00            # below this, the cell is damaged
+
+    # --- charging while docked ---
+    charge_when_docked: true
+    docking_status_topic: "/docking/status"
+    charge_current: 2.0               # A into the pack
+
+    publish_rate: 1.0                 # Hz. A battery does not change quickly.

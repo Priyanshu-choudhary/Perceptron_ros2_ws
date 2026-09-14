@@ -1,0 +1,80 @@
+# ros2_control configuration for the Perceptron 4-wheel skid-steer base.
+#
+# Geometry is measured from the URDF (which is measured from the STLs):
+#   wheel radius     0.0625 m   (tyre.stl is 125 mm diameter)
+#   track            0.37762 m  (2 * 0.18881)
+# The old values (0.065 / 0.416) were guesses and put a ~4% error on distance
+# and ~10% on heading, which is fatal for a +/-2 cm docking tolerance.
+#
+# wheel_separation_multiplier > 1 accounts for skid. A 4-wheel skid-steer turns
+# about a wider effective track than its geometric one, so the same wheel-speed
+# difference produces less yaw. Measured in this world by commanding 0.5 rad/s
+# and comparing /gazebo/model_states against the wheel kinematics: the effective
+# track came out 0.437 m against a geometric 0.37762 m, hence 1.16. Re-measure
+# it if you change the tyre friction, the mass, or the wheel positions.
+
+controller_manager:
+  ros__parameters:
+    update_rate: 100
+    use_sim_time: true
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    diff_drive_controller:
+      type: diff_drive_controller/DiffDriveController
+
+joint_state_broadcaster:
+  ros__parameters:
+    use_sim_time: true
+
+diff_drive_controller:
+  ros__parameters:
+    use_sim_time: true
+
+    left_wheel_names:  ["left_front", "left_back"]
+    right_wheel_names: ["right_front", "right_back"]
+
+    wheel_separation: 0.37762
+    wheel_radius: 0.0625
+
+    wheel_separation_multiplier: 1.16
+    left_wheel_radius_multiplier: 1.0
+    right_wheel_radius_multiplier: 1.0
+
+    base_frame_id: base_footprint
+    odom_frame_id: odom
+    # The EKF in perceptron_robot_bringup publishes odom -> base_footprint,
+    # fusing these wheel velocities with the IMU. Exactly one node may own a
+    # transform: two publishers make TF interleave them and the robot appears
+    # to stutter between two slightly different poses. The odometry TOPIC is
+    # still published and is what the EKF consumes.
+    enable_odom_tf: false
+    publish_rate: 50.0
+
+    pose_covariance_diagonal:  [0.001, 0.001, 1000000.0, 1000000.0, 1000000.0, 0.03]
+    twist_covariance_diagonal: [0.001, 0.001, 1000000.0, 1000000.0, 1000000.0, 0.03]
+
+    open_loop: false
+    position_feedback: true
+    use_stamped_vel: false
+    cmd_vel_timeout: 0.5
+    publish_limited_velocity: true
+
+    linear:
+      x:
+        has_velocity_limits: true
+        has_acceleration_limits: true
+        max_velocity: 0.6
+        min_velocity: -0.4
+        max_acceleration: 1.0
+        min_acceleration: -1.0
+
+    angular:
+      z:
+        has_velocity_limits: true
+        has_acceleration_limits: true
+        max_velocity: 1.5
+        min_velocity: -1.5
+        max_acceleration: 2.0
+        min_acceleration: -2.0

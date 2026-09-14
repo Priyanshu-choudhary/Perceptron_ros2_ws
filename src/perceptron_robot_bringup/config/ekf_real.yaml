@@ -1,0 +1,89 @@
+# robot_localization EKF - REAL HARDWARE
+#
+# Loaded by perceptron_robot_bringup/launch/robot.launch.py.
+# The sim equivalent is ekf.yaml; the two differ in exactly three places and
+# mixing them up is why the EKF silently did nothing:
+#
+#   ekf.yaml (sim)            ekf_real.yaml (this file)
+#   use_sim_time: true        use_sim_time: false        <- no /clock on hardware
+#   odom0: /diff_drive_        odom0: /odom              <- ros2_control does not
+#          controller/odom                                  run on the real robot;
+#                                                           the bridge publishes /odom
+#
+# WHAT IS FUSED
+#   odom0  vx only    - wheels say HOW FAR. On a 4-wheel skid-steer every tyre
+#                       scrubs sideways through a turn, so wheel yaw is
+#                       systematically wrong and is deliberately not fused.
+#   imu0   vyaw only  - gyro says WHICH WAY. A gyro does not scrub.
+#
+# Absolute yaw is NOT fused: the MPU-6050 has no magnetometer, so its heading is
+# an integrated gyro that drifts without bound. Feeding that in as an absolute
+# measurement would fight slam_toolbox/AMCL, which is the thing that actually
+# knows heading in the map frame. Linear acceleration is not fused either -
+# double-integrating MPU-6050 accelerometer noise makes position worse, not better.
+#
+# NOTE ON BIAS: robot_localization has NO gyro-bias state and can never learn one.
+# Bias removal happens upstream in the bridge node (gyro_bias.py). Do not expect
+# this filter to fix a drifting gyro - it cannot.
+#
+# ONLY ONE NODE MAY PUBLISH odom -> base_footprint. This one does. Both
+# stm32_bridge_node and jetson_bridge_node therefore run with publish_tf: false.
+
+ekf_filter_node:
+  ros__parameters:
+    use_sim_time: false
+
+    frequency: 30.0
+    sensor_timeout: 0.2
+    two_d_mode: true              # planar robot: z, roll and pitch pinned to zero
+    publish_tf: true
+    publish_acceleration: false
+
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom             # odom-frame filter; slam_toolbox/AMCL own map -> odom
+
+    # Flag order:
+    #   x     y     z
+    #   roll  pitch yaw
+    #   vx    vy    vz
+    #   vroll vpitch vyaw
+    #   ax    ay    az
+
+    odom0: /odom
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  false, false,
+                   false, false, false,
+                   false, false, false]
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+
+    imu0: /imu/data_raw
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 10
+    imu0_remove_gravitational_acceleration: false   # accel is not fused at all
+
+    process_noise_covariance: [0.05, 0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.05, 0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.06, 0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.03, 0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.03, 0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.01, 0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.025, 0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.025, 0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.04,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.01, 0.0,  0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.01, 0.0,  0.0,  0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.008, 0.0, 0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.01, 0.0,  0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.01, 0.0,
+                               0.0,  0.0,  0.0,  0.0,  0.0,  0.0,  0.0,   0.0,   0.0,   0.0,  0.0,  0.0,  0.0,  0.0,  0.015]

@@ -1,0 +1,64 @@
+# Configuration for STM32 Serial Hardware Bridge
+stm32_bridge_node:
+  ros__parameters:
+    serial_port: "/dev/ttyUSB0"         # STM32 serial port on Jetson
+    baud_rate: 115200                   # UART Baud rate
+    timeout: 0.01                       # Read timeout (seconds)
+    publish_rate_hz: 50.0
+
+    # Frames
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    imu_frame_id: "imu_link"
+    # false because the EKF in perceptron_robot_bringup owns odom -> base_footprint.
+    # Set it true only if you run without the EKF, and then nothing fuses the IMU.
+    publish_tf: false
+
+    # Watchdog
+    cmd_vel_timeout: 0.3                # Seconds before sending zero-velocity stop to STM32
+
+    # Hard speed ceiling, enforced on every /cmd_vel on the last hop before the
+    # motors. Every command source is held to it -- teleop, Nav2, a stray
+    # `ros2 topic pub` -- because clamping inside a teleop tool only limits
+    # that tool.
+    max_linear_speed: 0.3               # m/s
+    max_angular_speed: 0.5              # rad/s
+
+    # --- gyro correction ---
+    # bias:  offset the gyro reports when not turning. Left at 0.0 the node
+    #        measures it at boot and then keeps following it, which this unit
+    #        needs: the offset moved ~3 deg/s between two runs, and a stale
+    #        value walks the heading a full turn every couple of minutes.
+    # scale: multiplies the bias-corrected rate. Below 1.0 if the gyro
+    #        over-reports and the map turns further than the robot does.
+    #        Measure both with tools/calibrate_gyro.py.
+    gyro_bias_z: 0.0
+    # 6.28 measured: 3 full rotations (1080 deg) read back as 172 deg, i.e. one
+    # revolution reports exactly 1 radian. Confirmed independently with
+    # Python-configurator. Root cause in firmware not yet identified -- the
+    # register config and scale constant both audit as correct -- so this
+    # corrects it on the ROS side. The STM32 internal EKF still uses the
+    # uncorrected rate, so its 0x55 fused theta stays wrong; ROS does not
+    # fuse that field, but the configurator and any WebRTC telemetry do.
+    gyro_scale_z: 6.28
+    track_gyro_bias: true
+    calibrate_gyro_seconds: 5.0            # ~500 samples at 100 Hz
+    bias_still_seconds: 1.0
+    bias_time_constant: 20.0
+    bias_max_rate: 0.05                    # rad/s; above this it is real motion, not bias
+
+    # Yaw zero-velocity update. While the wheels report zero, publish exactly
+    # zero yaw rate instead of integrating amplified gyro noise. This is what
+    # stops the heading shaking when parked, and what makes a hand-spin in the
+    # air produce no rotation in RViz.
+    # Set false to re-enable the by-hand gyro check.
+    zupt_yaw: true
+    zupt_settle_seconds: 0.3
+
+    # Master IMU switch. Prefer robot.launch.py imu:=false, which also swaps
+    # the EKF to ekf_wheel_only.yaml; setting this alone leaves nothing
+    # providing yaw at all.
+    use_imu: true
+    # Effective, not physical (0.416 m). The calibration constant for heading
+    # when use_imu is false. Raise it if wheel-only turns come out short.
+    wheel_separation: 0.416

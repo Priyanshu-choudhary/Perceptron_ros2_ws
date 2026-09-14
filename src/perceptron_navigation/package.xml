@@ -1,0 +1,42 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>perceptron_navigation</name>
+  <version>1.0.0</version>
+  <description>SLAM, localisation, Nav2 and waypoint missions for the Perceptron robot</description>
+  <maintainer email="dev@todo.todo">Perceptron Developer</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>lifecycle_msgs</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>visualization_msgs</depend>
+  <depend>cv_bridge</depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <exec_depend>nav2_bringup</exec_depend>
+  <exec_depend>nav2_map_server</exec_depend>
+  <exec_depend>nav2_amcl</exec_depend>
+  <exec_depend>nav2_simple_commander</exec_depend>
+  <exec_depend>slam_toolbox</exec_depend>
+  <exec_depend>perceptron_robot_bringup</exec_depend>
+  <exec_depend>perceptron_robot_gazebo</exec_depend>
+  <exec_depend>perceptron_docking</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

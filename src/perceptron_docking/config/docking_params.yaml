@@ -1,0 +1,90 @@
+# ArUco auto-docking configuration.
+#
+# The distances below are tied to the physical robot in the URDF:
+#   base_footprint -> front bumper   0.196 m
+#   base_footprint -> camera         0.183 m, at 0.162 m height
+#   camera horizontal FOV            80 deg  (800x600 at 10 Hz)
+# A 0.15 m marker fills the camera's vertical field of view once the lens is
+# closer than 0.119 m, i.e. once base_footprint is inside ~0.30 m. That is why
+# the visual stop is at 0.40 m and the last stretch is dead-reckoned.
+
+aruco_detector_node:
+  ros__parameters:
+    marker_id: 42
+    marker_size: 0.15                   # side of the BLACK square, in metres
+    dictionary_name: "DICT_5X5_250"
+
+    camera_image_topic: "/camera/image_raw"
+    camera_info_topic: "/camera/camera_info"
+    use_camera_info: true
+    camera_optical_frame: "camera_optical_link"
+    base_frame: "base_footprint"        # poses are published in this frame
+    marker_frame_prefix: "aruco_dock_marker"
+
+    # Only used when use_camera_info is false. [fx 0 cx 0 fy cy 0 0 1]
+    # Only a fallback; the simulated camera is 800x600 with an 80 deg
+    # horizontal field of view, so fx = 400 / tan(40 deg) = 476.70.
+    fallback_camera_matrix: [476.70, 0.0, 400.0, 0.0, 476.70, 300.0, 0.0, 0.0, 1.0]
+    fallback_dist_coeffs: [0.0, 0.0, 0.0, 0.0, 0.0]
+
+    publish_debug_image: true
+    debug_image_topic: "/docking/debug_image"
+
+
+docking_controller_node:
+  ros__parameters:
+    # --- manoeuvre geometry ---
+    predock_standoff: 0.75              # pre-dock waypoint, measured out along the marker normal
+    predock_position_tolerance: 0.08    # "close enough" to the pre-dock waypoint
+    target_docking_distance: 0.40       # base_footprint -> marker at the visual stop
+    final_push_distance: 0.19           # blind odometry push after the visual stop
+    contact_timeout_seconds: 8.0        # if the push stalls this long, call it docked
+
+    # These three set the final docking accuracy, and the residual heading
+    # error also drags the robot sideways during the blind push: 0.07 rad over
+    # 0.19 m adds about 1.3 cm of lateral drift.
+    distance_tolerance: 0.02
+    lateral_tolerance: 0.025
+    angle_tolerance: 0.07               # ~4 deg
+
+    # --- velocity envelope ---
+    max_linear_velocity: 0.25
+    min_linear_velocity: 0.04
+    max_angular_velocity: 0.60
+    search_angular_velocity: 0.35
+    final_linear_velocity: 0.07
+    contact_linear_velocity: 0.05
+
+    # --- gains ---
+    # APPROACH uses a rho/alpha/beta pose regulator. Stability needs
+    # k_rho > 0, k_beta < 0 and k_alpha - k_rho > 0.
+    # Final-placement gains, used by ALIGNING over the last half metre onto the
+    # pre-dock pose. Renamed from k_* when Nav2 took over the approach leg:
+    # these no longer drive the whole journey, only the placement.
+    align_max_range: 0.80               # beyond this, hand back to Nav2
+    align_k_rho: 0.55
+    align_k_alpha: 1.40
+    align_k_beta: -0.55
+    nav2_max_attempts: 3                # transient Nav2 failures are retried
+    # Skip the marker sweep when a previous patrol already recorded the dock.
+    # The file is written in the map frame by perceptron_navigation's patrol
+    # supervisor, so it is only meaningful while map means the same thing.
+    use_saved_dock: true
+    dock_store_path: "~/.ros/perceptron_dock/dock.json"
+    predock_goal_update_threshold: 0.20 # re-aim if a refined estimate moves the waypoint
+    # FINAL_APPROACH follows the dock axis. Critically damped at
+    # final_linear_velocity for a ~0.15 m cross-track decay length:
+    #   kp_final_heading  = 2 * v / L        kp_final_lateral = v / L^2
+    # Raising kp_final_heading alone makes the robot hold a steady offset
+    # instead of closing it; the cross-track gain is what pulls it onto the axis.
+    kp_final_heading: 0.95
+    kp_final_lateral: 3.10
+    pose_filter_alpha: 0.3              # blending happens in the odom frame, so this costs no lag
+
+    # --- watchdogs / io ---
+    marker_timeout_seconds: 1.5         # how long a detection counts as "live vision"
+    estimate_timeout_seconds: 10.0      # how long the odom-propagated dock estimate stays usable
+    max_docking_time_seconds: 180.0
+    cmd_vel_topic: "/diff_drive_controller/cmd_vel_unstamped"  # "/cmd_vel" on the real STM32 base
+    odom_topic: "/diff_drive_controller/odom"
+    odom_frame: "odom"

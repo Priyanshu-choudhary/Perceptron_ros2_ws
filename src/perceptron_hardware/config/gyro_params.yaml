@@ -1,0 +1,56 @@
+# Yaw-gyro conditioning. SINGLE SOURCE OF TRUTH - loaded by BOTH bridges.
+#
+# These used to live in hardware_params.yaml, which robot.launch.py loads only
+# for stm32_bridge_node. jetson_bridge_node got an inline parameter dict with no
+# gyro settings at all, so on the LAN-bridge path - the DEFAULT, since use_jetson
+# defaults to true - none of this was applied. The gyro was published raw,
+# unscaled, unbiased and with an all-zero covariance, which robot_localization
+# reads as "certain" rather than "unknown".
+#
+# The /** wildcard applies them to whichever bridge is running, so the robot
+# behaves identically over USB and over the LAN bridge.
+
+/**:
+  ros__parameters:
+    # --- gyro correction ---
+    # bias:  offset the gyro reports when not turning. Left at 0.0 the node
+    #        measures it at boot and then keeps following it, which this unit
+    #        needs: the offset moved ~3 deg/s between two runs, and a stale
+    #        value walks the heading a full turn every couple of minutes.
+    # scale: multiplies the bias-corrected rate. Below 1.0 if the gyro
+    #        over-reports and the map turns further than the robot does.
+    #        Measure both with tools/calibrate_gyro.py.
+    gyro_bias_z: 0.0
+    # 6.28 measured: 3 full rotations (1080 deg) read back as 172 deg, i.e. one
+    # revolution reports exactly 1 radian. Confirmed independently with
+    # Python-configurator. Root cause in firmware not yet identified -- the
+    # register config and scale constant both audit as correct -- so this
+    # corrects it on the ROS side. The STM32 internal EKF still uses the
+    # uncorrected rate, so its 0x55 fused theta stays wrong; ROS does not
+    # fuse that field, but the configurator and any WebRTC telemetry do.
+    gyro_scale_z: 6.28
+    track_gyro_bias: true
+    calibrate_gyro_seconds: 5.0            # ~500 samples at 100 Hz
+    bias_still_seconds: 1.0
+    bias_time_constant: 20.0
+    # Above this REAL rate (post-scale) a reading is motion, not bias, and the
+    # tracker stands down.
+    #
+    # Was 0.05, which was below the gyro's own noise floor and silently disabled
+    # the tracker. The measured raw noise is 0.0087 rad/s std; at scale 6.28
+    # that is 0.055 rad/s of noise, so a 0.05 gate tripped on roughly a third of
+    # samples while the robot sat perfectly still. The bias then went stale as
+    # the chip warmed, which is a heading that starts good and drifts later.
+    #
+    # 0.15 is ~2.7 sigma of that noise, and still far below a real turn
+    # (max_angular_speed is 0.5). Re-tune this if gyro_scale_z changes: the
+    # threshold has to clear noise x scale.
+    bias_max_rate: 0.15
+
+    # Yaw zero-velocity update. While the wheels report zero, publish exactly
+    # zero yaw rate instead of integrating amplified gyro noise. This is what
+    # stops the heading shaking when parked, and what makes a hand-spin in the
+    # air produce no rotation in RViz.
+    # Set false to re-enable the by-hand gyro check.
+    zupt_yaw: true
+    zupt_settle_seconds: 0.3

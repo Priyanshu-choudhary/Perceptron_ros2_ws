@@ -1,0 +1,27 @@
+<!-- Frontier goals stay in known free space. Bounded recoveries, no blind
+     backup. Smac2D global planner, as in the nav tree. -->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="2" name="ExploreRecovery">
+      <PipelineSequence>
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="1">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="Smac2D"/>
+            <ClearEntireCostmap service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="1">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <RoundRobin>
+        <Sequence>
+          <ClearEntireCostmap service_name="local_costmap/clear_entirely_local_costmap"/>
+          <ClearEntireCostmap service_name="global_costmap/clear_entirely_global_costmap"/>
+        </Sequence>
+        <Wait wait_duration="2"/>
+      </RoundRobin>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

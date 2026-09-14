@@ -1,0 +1,38 @@
+# Patrol route for mission_node. All poses are in the `map` frame, metres and
+# radians, matching room_world.world (an 8 x 6 m room, walls at x=+/-4, y=+/-3).
+#
+# The map frame's origin is wherever the robot was when SLAM started, so if you
+# spawn somewhere other than the default (-3, -2, 0) these numbers move with it.
+# The reliable way to collect new ones: drive the robot to a spot, then
+#   ros2 run tf2_ros tf2_echo map base_footprint
+# and paste the translation and yaw in here.
+
+waypoints:
+  - name: WP1          # moved north off crate_b, which left only 0.40 m clearance
+    x: -2.0
+    y: 2.3
+    yaw: 0.0
+  - name: WP2          # the far side of the partition, so the planner has to route around it
+    x: 2.0
+    y: 2.2
+    yaw: 0.0
+  - name: WP3
+    x: 2.4
+    y: -2.2
+    yaw: 1.5708
+
+home:
+  name: HOME
+  x: -3.0
+  y: -2.0
+  yaw: 0.0
+
+# Roughly 1.2 m in front of the dock marker, facing it. Nav2 only has to get
+# within its 0.15 m goal tolerance; the ArUco controller does the precision
+# work from here. The dock model sits at x=3.55, y=-1.80, yaw=pi, and its
+# marker plate is 0.0455 m along the model's +X, so the marker is at x=3.5045.
+dock_staging:
+  name: DOCK_STAGING
+  x: 2.60              # 0.90 m from the marker, still on the dock axis.
+  y: -1.80             # 2.30 sat 0.36 m from crate_a, barely outside the
+  yaw: 0.0             # robot radius; check with tools/checkwaypoints.py

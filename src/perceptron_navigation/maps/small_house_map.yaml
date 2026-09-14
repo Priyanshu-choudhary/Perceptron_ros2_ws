@@ -1,0 +1,11 @@
+# Map of small_house.world, taken from the upstream AWS package
+# (maps/turtlebot3_waffle_pi/map.yaml) because it was built in this exact
+# world and is more complete than anything a short scripted drive produces.
+# Thresholds are upstream's and are left alone.
+image: small_house_map.pgm
+resolution: 0.050000
+origin: [-12.500000, -12.500000, 0.000000]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196
+

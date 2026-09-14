@@ -1,0 +1,27 @@
+# ── colcon build artefacts ──────────────────────────────────────
+build/
+install/
+log/
+
+# ── vendored upstream packages ──────────────────────────────────
+# Cloned from their own remotes, not authored here. Re-clone with the
+# commands in VENDOR_PACKAGES.md rather than committing ~183 MB of
+# meshes and textures into this repo.
+/src/aws_robomaker_small_house_world/
+/src/ldlidar_stl_ros2/
+
+# ── python ──────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ── editor / tooling scratch ────────────────────────────────────
+.claude_backup_*/
+.vscode/
+*.swp
+*~
+
+# ── ROS runtime leftovers ───────────────────────────────────────
+*.bag
+rosdep.log

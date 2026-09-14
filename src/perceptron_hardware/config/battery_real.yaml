@@ -1,0 +1,48 @@
+# Battery monitor against the REAL pack.
+#
+# Differs from battery_params.yaml in exactly two ways that matter:
+# simulate is false, so voltage and current come from the ECU's 0x55 frame via
+# stm32_bridge_node, and use_sim_time is false because there is no /clock.
+#
+# The pack is a 3S LiPo. Measured on the bench at rest: 12.42 V, about 90 mA
+# idle draw. bus_raw -> volts uses ((raw >> 3) * 4) / 1000, matching
+# Python-configurator/protocol.py; that scaling lives in stm32_bridge_node.py
+# and has to change in both places if the firmware's ADC divider changes.
+
+battery_node:
+  ros__parameters:
+    use_sim_time: false
+
+    # --- pack description ---
+    cell_count: 3                     # 3S, confirmed against a 12.4 V measurement
+    design_capacity: 5.0              # Ah -- correct this to the real pack
+    internal_resistance: 0.05         # ohm, whole pack; used to undo load sag
+    serial_number: "PERCEPTRON-3S-01"
+    location: "chassis_bay"
+    frame_id: "base_link"
+
+    # --- real measurements ---
+    # With simulate false the voltage/current parameters below are ignored;
+    # the node reads /battery/measured_voltage and /battery/measured_current.
+    # Until those arrive it reports present=false with NaN rather than
+    # inventing a healthy-looking 12 V.
+    simulate: false
+    temperature: 25.0                 # no pack thermistor yet, so this is nominal
+    present: true
+
+    simulate_discharge: false
+
+    # --- thresholds ---
+    low_battery_percentage: 0.25
+    critical_battery_percentage: 0.10
+    critical_cell_voltage: 3.30       # 9.90 V on a 3S pack
+    full_cell_voltage: 4.20           # 12.60 V
+    max_cell_voltage: 4.25
+    min_cell_voltage: 3.00
+
+    # --- charging while docked ---
+    charge_when_docked: true
+    docking_status_topic: "/docking/status"
+    charge_current: 2.0
+
+    publish_rate: 1.0
