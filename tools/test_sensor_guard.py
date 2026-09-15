@@ -7,10 +7,12 @@ from perceptron_hardware import sensor_guard as sg
 NAN = float('nan')
 INF = float('inf')
 fails = []
+ran = []
 
 
 def check(label, got, want):
     ok = got == want
+    ran.append(label)
     print('%-56s %-8s %s' % (label, got, 'OK' if ok else 'FAIL (want %s)' % want))
     if not ok:
         fails.append(label)
@@ -40,8 +42,14 @@ check('odom: teleported position rejected',
 # Raw gyro during a real 0.4 rad/s turn at scale 6.28 is only 0.064.
 check('IMU: real turn accepted (raw 0.064 rad/s)',
       sg.imu_sample_ok(0.1, 0.2, 9.81, 0.01, 0.01, 0.064), True)
-check('IMU: full-scale 8.7 rad/s accepted',
-      sg.imu_sample_ok(0, 0, 9.81, 0, 0, 8.7), True)
+# Saturation is 4.36 rad/s since the firmware moved the gyro to +/-250 dps.
+# 8.7 was legal at the old +/-500 range and is corruption now, so it must flip
+# from accepted to rejected - if this pair ever disagrees with mpu6050.c's
+# GYRO_CONFIG, one of the two has been changed without the other.
+check('IMU: near-full-scale 4.3 rad/s accepted',
+      sg.imu_sample_ok(0, 0, 9.81, 0, 0, 4.3), True)
+check('IMU: 8.7 rad/s (past +/-250 dps saturation) rejected',
+      sg.imu_sample_ok(0, 0, 9.81, 0, 0, 8.7), False)
 check('IMU: bias-only reading accepted',
       sg.imu_sample_ok(0, 0, 9.81, 0, 0, -0.031), True)
 check('odom: top speed 0.3 m/s accepted',
@@ -60,4 +68,4 @@ print()
 if fails:
     print('FAILURES: %d -> %s' % (len(fails), fails))
     sys.exit(1)
-print('all 17 checks passed')
+print('all %d checks passed' % len(ran))

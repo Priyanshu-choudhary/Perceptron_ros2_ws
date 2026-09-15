@@ -83,59 +83,6 @@ Visualization Manager:
         Shaft Radius: 0.02
         Head Length: 0.1
         Head Radius: 0.05
-    - Class: rviz_default_plugins/Path
-      Name: Global Plan
-      Enabled: true
-      Topic:
-        Value: /plan
-        Depth: 5
-        Durability Policy: Volatile
-        Reliability Policy: Reliable
-      Color: 25; 255; 0
-      Alpha: 1
-      Line Style: Lines
-      Buffer Length: 1
-      Offset: {X: 0, Y: 0, Z: 0.01}
-      Pose Style: None
-    - Class: rviz_default_plugins/Path
-      Name: Local Plan
-      Enabled: true
-      Topic:
-        Value: /local_plan
-        Depth: 5
-        Durability Policy: Volatile
-        Reliability Policy: Reliable
-      Color: 0; 170; 255
-      Alpha: 1
-      Line Style: Lines
-      Buffer Length: 1
-      Offset: {X: 0, Y: 0, Z: 0.02}
-      Pose Style: None
-    # The inflated costmap. This is what the planner actually refuses to start
-    # or end inside, so when a goal is rejected as "lethal space" this display
-    # is where you can see why.
-    - Class: rviz_default_plugins/Map
-      Name: Global Costmap
-      Enabled: true
-      Topic:
-        Value: /global_costmap/costmap
-        Depth: 1
-        Durability Policy: Transient Local
-        Reliability Policy: Reliable
-      Alpha: 0.35
-      Color Scheme: costmap
-      Draw Behind: false
-    - Class: rviz_default_plugins/Map
-      Name: Local Costmap
-      Enabled: false
-      Topic:
-        Value: /local_costmap/costmap
-        Depth: 1
-        Durability Policy: Transient Local
-        Reliability Policy: Reliable
-      Alpha: 0.35
-      Color Scheme: costmap
-      Draw Behind: false
   Global Options:
     Background Color: 48; 48; 48
     # map, not laser_link: with SLAM running this is the frame that stays put

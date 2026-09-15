@@ -1,0 +1,102 @@
+# Wall-marker absolute localisation.
+#
+# The camera intrinsics below are the measured values from camera_calib.json,
+# at the 1280x720 they were measured at. fx ~= 411 over 1280 px is a ~115 deg
+# horizontal field of view, and that wide lens drives several choices here:
+#
+#   * edge_margin_fraction exists because a 5-coefficient plumb-bob model fits
+#     the edges of a lens this wide poorly, and the resulting pose error hides
+#     inside a perfectly good reprojection residual.
+#   * max_range is 2.0 m, but that is the hard ceiling rather than a working
+#     figure. A 60 mm marker spans fx*S/Z = 24.7/Z pixels, and a 6X6 marker
+#     needs 8 modules across, so it is ~3.1 px/module at 1 m and ~2.1 at 1.5 m
+#     -- which is roughly where decoding gives up. Expect to work under 1.2 m.
+
+aruco_localizer_node:
+  ros__parameters:
+    use_sim_time: false
+
+    jetson_ip: "192.168.1.11"
+    telemetry_port: 5555
+    dictionary_name: "DICT_6X6_250"
+
+    # Written by the teach tool. Until it exists the node stays inert and says
+    # so once every ten seconds, rather than guessing.
+    marker_map_path: "~/perceptron_test_ws/config/marker_map.yaml"
+
+    camera_matrix: [410.9212916385953, 0.0, 634.8042096493966,
+                    0.0, 411.4395116912116, 347.58359871233904,
+                    0.0, 0.0, 1.0]
+    dist_coeffs: [0.030287865182229395, -0.002860707267771121,
+                  -0.004223044189411946, -0.0003374289867825264,
+                  -0.0003820853552867496]
+    calibration_width: 1280
+    calibration_height: 720
+
+    map_frame: "map"
+    base_frame: "base_footprint"
+    camera_optical_frame: "camera_optical_link"
+
+    # --- gating ---------------------------------------------------------
+    # A wrong fix is worse than no fix: AMCL does not merely ignore a bad
+    # /initialpose, it throws away its particle distribution and converges
+    # onto it. Every threshold here is cheaper than that outcome.
+    max_reprojection_error: 2.0     # px, RMS over every corner used
+    min_tiles: 2                    # of the 4; 2 still gives a usable baseline
+    min_range: 0.25                 # closer than this and the board overflows
+    max_range: 2.0                  # see the note above; realistically ~1.2
+    edge_margin_fraction: 0.15      # reject corners in the outer 15% of frame
+    agreement_frames: 5             # consecutive fixes that must agree
+    agreement_position_tolerance: 0.05
+    agreement_yaw_tolerance: 0.05   # rad, ~2.9 deg
+
+    # Vision latency (capture -> detect -> ZMQ -> here) is unmodelled, so a
+    # fix taken while moving is stale by an unknown amount. Requiring the
+    # robot to be stationary removes the problem instead of estimating it.
+    max_seed_speed: 0.02            # m/s and rad/s
+    odom_topic: "/odom"
+    require_odom: true
+
+    # --- output ---------------------------------------------------------
+    # One shot by default: seed AMCL, then stop and let it do its job. AMCL
+    # owns map -> odom and is better than this node everywhere except at
+    # startup. Call /aruco/relocalize to arm another seed.
+    auto_seed: true
+    reseed_interval: 0.0            # >0 turns this into a periodic re-seed
+    seed_position_stddev: 0.05      # how much AMCL should spread its particles
+    seed_yaw_stddev: 0.03
+
+
+teach_marker_node:
+  ros__parameters:
+    use_sim_time: false
+
+    jetson_ip: "192.168.1.11"
+    telemetry_port: 5555
+    output_path: "~/perceptron_test_ws/config/marker_map.yaml"
+    map_reference: "room_map.yaml"
+
+    board_name: "wall_north"
+    tile_size: 0.06
+    tile_spacing: 0.08              # CENTRE to CENTRE. Measure the print.
+    # Slot order: top_left, top_right, bottom_left, bottom_right, as seen by
+    # someone standing in front of the wall.
+    ids: "0,1,2,3"
+
+    camera_matrix: [410.9212916385953, 0.0, 634.8042096493966,
+                    0.0, 411.4395116912116, 347.58359871233904,
+                    0.0, 0.0, 1.0]
+    dist_coeffs: [0.030287865182229395, -0.002860707267771121,
+                  -0.004223044189411946, -0.0003374289867825264,
+                  -0.0003820853552867496]
+    calibration_width: 1280
+    calibration_height: 720
+
+    map_frame: "map"
+    base_frame: "base_footprint"
+    camera_optical_frame: "camera_optical_link"
+
+    samples_per_capture: 20
+    capture_timeout: 15.0
+    max_reprojection_error: 2.0
+    min_tiles: 4                    # survey from all four, or not at all

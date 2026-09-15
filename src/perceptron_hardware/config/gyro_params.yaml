@@ -28,7 +28,7 @@
     # corrects it on the ROS side. The STM32 internal EKF still uses the
     # uncorrected rate, so its 0x55 fused theta stays wrong; ROS does not
     # fuse that field, but the configurator and any WebRTC telemetry do.
-    gyro_scale_z: 6.28
+    gyro_scale_z: 6.3
     track_gyro_bias: true
     calibrate_gyro_seconds: 5.0            # ~500 samples at 100 Hz
     bias_still_seconds: 1.0

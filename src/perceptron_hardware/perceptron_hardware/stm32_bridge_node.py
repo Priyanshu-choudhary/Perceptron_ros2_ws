@@ -163,7 +163,7 @@ class STM32BridgeNode(Node):
         # track is 0.416 m; the effective value is larger because skid-steer
         # tyres scrub. Only matters when the EKF is fusing wheel vyaw, i.e.
         # use_imu false.
-        self.declare_parameter('wheel_separation', 0.416)
+        self.declare_parameter('wheel_separation', 0.63)
         # Scale error shows up as the map turning further than the robot did.
         # Unlike the bias this really is a constant -- it is the LSB-per-dps
         # conversion in firmware, not something that drifts -- so it is

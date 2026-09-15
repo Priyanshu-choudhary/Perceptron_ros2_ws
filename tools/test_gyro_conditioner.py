@@ -45,7 +45,11 @@ class FakeNode:
     def has_parameter(self, n):
         return n in self._p
 
-    def declare_parameter(self, n, d):
+    def declare_parameter(self, n, d, descriptor=None):
+        # descriptor is accepted and ignored: the real node is handed a
+        # ParameterDescriptor(dynamic_typing=True) for float params, so that a
+        # YAML `gyro_scale_z: 1` (INTEGER) does not kill the bridge at startup.
+        # Nothing here type-checks, so the stub only has to tolerate the arg.
         self._p[n] = FakeParam(self._over.get(n, d))
 
     def get_parameter(self, n):

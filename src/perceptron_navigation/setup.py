@@ -37,6 +37,8 @@ setup(
             'patrol_node = perceptron_navigation.patrol_node:main',
             'patrol = perceptron_navigation.patrol_client:main',
             'wait_for_odom_tf = perceptron_navigation.wait_for_odom_tf:main',
+            'aruco_localizer_node = perceptron_navigation.aruco_localizer_node:main',
+            'teach_marker_node = perceptron_navigation.teach_marker_node:main',
         ],
     },
 )

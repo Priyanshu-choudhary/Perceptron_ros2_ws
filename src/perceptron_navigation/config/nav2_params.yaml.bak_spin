@@ -34,12 +34,7 @@ amcl:
     laser_max_range: 12.0
     laser_min_range: 0.05
     laser_model_type: "likelihood_field"
-    # 240 of the 720 beams the bridge publishes, up from 90. AMCL scores every
-    # particle against every beam, so this is the main accuracy-versus-CPU dial.
-    # At 90 it was using an eighth of a clean 500-point scan and throwing away
-    # most of the evidence it had; 240 is still a third of the cost of all of
-    # them. Drop it back toward 120 if the laptop cannot keep up.
-    max_beams: 240
+    max_beams: 90
     max_particles: 2000
     min_particles: 500
     odom_frame_id: "odom"
@@ -53,18 +48,8 @@ amcl:
     sigma_hit: 0.2
     tf_broadcast: true
     transform_tolerance: 1.0
-    # How far the robot must move before AMCL runs a filter update AT ALL.
-    #
-    # This is the reason localisation "never corrects the drift, or corrects it
-    # very slowly": at 0.25 m / 0.2 rad the filter sat idle through 25 cm of
-    # travel or 11.5 degrees of turn, and between updates the pose is pure dead
-    # reckoning. It is the same failure mode as slam_toolbox's
-    # minimum_travel_distance / minimum_travel_heading, and the same fix.
-    #
-    # 0.1 / 0.1 is roughly 2.5x more corrections. AMCL is cheap compared with
-    # scan matching and this runs on the laptop, not the Nano.
-    update_min_a: 0.1
-    update_min_d: 0.1
+    update_min_a: 0.2
+    update_min_d: 0.25
     z_hit: 0.5
     z_max: 0.05
     z_rand: 0.5
@@ -189,25 +174,7 @@ controller_server:
       yaw_goal_tolerance: 0.20
 
     FollowPath:
-      # RotationShimController wraps DWB. When the path ahead starts more than
-      # angular_dist_threshold away from where the robot is pointing, the shim
-      # rotates in place to face it first, then hands over to DWB.
-      #
-      # This is needed because DWB is a pure trajectory sampler: it scores
-      # candidates on progress along the path, so a rolling arc almost always
-      # beats a stationary spin and the robot swings wide instead of turning on
-      # the spot. In a 5 x 4 m room that wide arc is what runs into inflation.
-      # Every DWB parameter below still applies - the shim only intercepts the
-      # first cycles of a goal, then it is DWB the rest of the way.
-      plugin: "nav2_rotation_shim_controller::RotationShimController"
-      primary_controller: "dwb_core::DWBLocalPlanner"
-      angular_dist_threshold: 0.785        # 45 deg: beyond this, spin first
-      forward_sampling_distance: 0.5       # how far along the path to aim at
-      rotate_to_heading_angular_vel: 0.8   # below max_vel_theta (1.0)
-      max_angular_accel: 2.0               # matches acc_lim_theta
-      simulate_ahead_time: 1.0
-      # Left false: the RotateToGoal critic below already handles final heading.
-      rotate_to_goal_heading: false
+      plugin: "dwb_core::DWBLocalPlanner"
       debug_trajectory_details: true
       # Reverse IS allowed, but kept slow and made expensive by the
       # PreferForward critic below. There is still no rear-facing sensor, so
@@ -412,7 +379,7 @@ local_costmap:
         cost_scaling_factor: 3.0
         # A little over the robot radius, so the planner prefers the middle of
         # a gap but can still squeeze through one when it has to.
-        inflation_radius: 0.4
+        inflation_radius: 0.55
       always_send_full_costmap: true
 
 global_costmap:
@@ -536,7 +503,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.4
+        inflation_radius: 0.3
       always_send_full_costmap: true
 
 map_server:

@@ -1,0 +1,52 @@
+# EXAMPLE ONLY -- copy to marker_map.yaml and replace the numbers by surveying.
+#
+# This file is not loaded by anything. The real one is written by the teach
+# tool, which measures the board instead of asking you to guess:
+#
+#   ros2 launch perceptron_navigation marker_localization.launch.py mode:=teach
+#   ros2 service call /aruco/teach/capture std_srvs/srv/Trigger   # x3-4 views
+#   ros2 service call /aruco/teach/save    std_srvs/srv/Trigger
+#
+# If you would rather seed it by hand first, read the pose off the map image.
+# For room_map.yaml (resolution 0.05, origin [-3.52, -1.52, 0]):
+#
+#     x = -3.52 + col * 0.05
+#     y = -1.52 + (height - 1 - row) * 0.05      # PGM row 0 is the TOP row
+#
+# One map cell is 5 cm, so a hand-read pose is a starting point, not a survey.
+
+frame_id: map
+
+# WHICH map these poses are expressed in. A pose in the "map" frame means
+# nothing without it: under SLAM the frame is anchored wherever the robot
+# happened to start, so last week's board pose is meaningless this week unless
+# you relocalise against the same saved map.
+map_reference: room_map.yaml
+
+boards:
+  # One 2x2 group of markers = one board. Solving all four tiles as a single
+  # rigid body is what makes this accurate enough to trust: four 60 mm tiles
+  # spread over ~140 mm have roughly four times the baseline of one tile, and
+  # the extra points break the planar-PnP flip ambiguity that makes a lone
+  # square's heading snap between two values.
+  wall_north:
+    tile_size: 0.06        # side of the BLACK square, metres
+    tile_spacing: 0.08     # CENTRE to CENTRE, not the gap. spacing = size + gap
+
+    # Which printed id sits in which slot, as seen by someone standing in
+    # front of the wall reading the markers. Getting this wrong does not fail
+    # loudly -- it silently rotates or mirrors the board, so check it.
+    ids:
+      0: top_left
+      1: top_right
+      2: bottom_left
+      3: bottom_right
+
+    pose:
+      x: 2.310           # map-frame position of the CENTRE of the 2x2 group
+      y: -0.870
+      z: 0.900           # height off the floor; not used in the 2D fix, but
+                         # it is the thing to check when a pose looks tilted
+      yaw_deg: 180.0     # map direction the board FACE points, i.e. out into
+                         # the room. A board you read while facing east
+                         # (yaw 0) is itself at yaw_deg 180.

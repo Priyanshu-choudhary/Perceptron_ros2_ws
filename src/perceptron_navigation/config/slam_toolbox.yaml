@@ -46,13 +46,39 @@ slam_toolbox:
     use_scan_barycenter: true
     # Add a scan every 0.2 m or 0.25 rad. Tighter gives a denser pose graph and
     # a better map at the cost of CPU; looser drifts.
-    minimum_travel_distance: 0.2
-    minimum_travel_heading: 0.25
+    # How far the robot must move before a scan is matched at all. These
+    # are the reason a correction takes "a few seconds to overlap": at 0.25 rad
+    # the pose was only revisited after 14 deg of turn, so between updates the
+    # scan rides on raw odometry and visibly lags the map.
+    #
+    # 0.1 rad is 5.7 deg, roughly 2.5x more corrections, which is affordable:
+    # matching is on the laptop, not the Nano, and the lidar is a clean 10 Hz.
+    # Raise them again if the CPU cannot keep up - a matcher that falls behind
+    # is worse than one that runs less often.
+    minimum_travel_distance: 0.1
+    minimum_travel_heading: 0.1
     scan_buffer_size: 10
     scan_buffer_maximum_scan_distance: 10.0
     link_match_minimum_response_fine: 0.1
     link_scan_maximum_distance: 1.5
-    do_loop_closing: true
+    # OFF deliberately. Loop closure exists to snap out accumulated drift
+    # when a long traverse returns somewhere already mapped. This room is
+    # 5.2 x 4.05 m - most of it is inside lidar range from anywhere in it, so
+    # continuous scan matching already keeps the pose registered and there is
+    # no drift left for loop closure to remove.
+    #
+    # What it does bring is risk. It is the ONLY mechanism in slam_toolbox that
+    # can move the pose discontinuously, and a rectangular room matches itself
+    # well when rotated by 90 deg - especially a partial view from near a
+    # corner. loop_search_space_dimension is 8.0 m, wider than the room itself,
+    # and loop_match_minimum_response_fine of 0.45 is permissive. That is the
+    # single 90 deg snap seen once in four runs, which is exactly the size and
+    # the suddenness a bad loop closure produces.
+    #
+    # Turn this back ON before mapping anything with corridors or a space too
+    # large to see across, and raise loop_match_minimum_response_fine to ~0.6
+    # and loop_match_minimum_chain_size to ~15 when you do.
+    do_loop_closing: false
     loop_search_maximum_distance: 3.0
     loop_match_minimum_chain_size: 10
     loop_match_maximum_variance_coarse: 3.0

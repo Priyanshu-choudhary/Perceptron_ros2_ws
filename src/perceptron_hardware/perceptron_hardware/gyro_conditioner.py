@@ -26,6 +26,13 @@ first would scale the offset too and leave a residual behind.
 
 import math
 import time
+try:
+    from rcl_interfaces.msg import ParameterDescriptor
+except ImportError:
+    # tools/test_gyro_conditioner.py exercises this module with a stub node and
+    # no ROS on the path at all. Keep that possible: the descriptor is only a
+    # relaxation of rclpy's type check, so its absence costs nothing offline.
+    ParameterDescriptor = None
 
 
 class GyroConditioner:
@@ -64,7 +71,23 @@ class GyroConditioner:
     def declare_parameters(cls, node):
         """Declare every parameter this needs on `node`. Safe to call once."""
         for name, default in cls.PARAMS:
-            if not node.has_parameter(name):
+            if node.has_parameter(name):
+                continue
+            if isinstance(default, float) and ParameterDescriptor is not None:
+                # rclpy type-checks a YAML override against the DECLARED type,
+                # and YAML reads a bare `1` as INTEGER. So writing
+                # `gyro_scale_z: 1` instead of `1.0` raises
+                # InvalidParameterTypeException and kills the whole bridge node
+                # at startup - which then looks like a network fault, because
+                # the symptom is simply no data from the Jetson.
+                #
+                # That is a bad trade for a tuning value edited by hand every
+                # time someone calibrates. dynamic_typing lets the int through;
+                # every read below already passes through float(), so nothing
+                # downstream can tell the difference.
+                node.declare_parameter(
+                    name, default, ParameterDescriptor(dynamic_typing=True))
+            else:
                 node.declare_parameter(name, default)
 
     def __init__(self, node):

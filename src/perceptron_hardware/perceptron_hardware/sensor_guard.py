@@ -18,18 +18,29 @@ The EKF fuses exactly two numbers from these nodes - twist.linear.x from the
 odometry and angular_velocity.z from the IMU - so those two are the poisoning
 route and are checked hardest. The rest is hygiene.
 
-Limits are physical, not statistical: an MPU-6050 at +/-500 dps CANNOT report
-more than 8.73 rad/s, so anything beyond that is corruption by definition and
+Limits are physical, not statistical: an MPU-6050 at +/-250 dps CANNOT report
+more than 4.36 rad/s, so anything beyond that is corruption by definition and
 throwing it away costs no real data. Note these bound the RAW reading, before
 gyro_scale_z is applied.
+
+These track the firmware's range registers. If GYRO_CONFIG or ACCEL_CONFIG in
+mpu6050.c changes, change these with it - a ceiling left at an old, wider range
+still catches NaN and gross corruption, but silently stops catching a sensor
+that has saturated.
 """
 
 import math
 
 
 #: Physical ceilings for a raw MPU-6050 sample at the ranges the firmware sets
-#: (+/-500 dps gyro, +/-4 g accel), with headroom for the bias offset.
-GYRO_LIMIT = 12.0        # rad/s  (range is 8.73)
+#: (+/-250 dps gyro, +/-4 g accel), with headroom for the bias offset.
+#:
+#: The gyro moved to +/-250 dps to halve its noise - the robot's fastest turn
+#: is 0.5 rad/s, so the wider range was buying nothing. Saturation is now
+#: 4.36 rad/s and this ceiling comes down with it: a knock hard enough to clip
+#: the sensor reads LOW, and a low reading is exactly the kind of plausible
+#: wrong number the EKF would happily integrate.
+GYRO_LIMIT = 6.0         # rad/s  (range is 4.36)
 ACCEL_LIMIT = 50.0       # m/s^2  (range is 39.2)
 
 #: Ceilings for the drivetrain. max_linear_speed is 0.3 m/s and max_angular

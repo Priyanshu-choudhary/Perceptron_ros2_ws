@@ -65,6 +65,13 @@ def generate_launch_description():
             default_value='/diff_drive_controller/cmd_vel_unstamped',
             description='What the base listens on. /cmd_vel on the real robot.'),
         DeclareLaunchArgument('autostart', default_value='true'),
+        DeclareLaunchArgument(
+            'relay', default_value='true',
+            description='Run cmd_vel_relay. Needed in simulation, where the base '
+                        'listens on /diff_drive_controller/cmd_vel_unstamped. On '
+                        'the real robot Nav2 already ends on /cmd_vel and the '
+                        'bridge subscribes there, so relaying /cmd_vel onto '
+                        '/cmd_vel would be a feedback loop - pass false.'),
         # The spawn pose, so AMCL can seed itself instead of waiting for a human
         # to drag "2D Pose Estimate" in RViz before anything will move.
         DeclareLaunchArgument('initial_pose_x', default_value='0.0'),
@@ -159,6 +166,7 @@ def generate_launch_description():
         executable='cmd_vel_relay',
         name='cmd_vel_relay',
         output='screen',
+        condition=IfCondition(LaunchConfiguration('relay')),
         parameters=[{
             'use_sim_time': use_sim_time,
             'input_topic': LaunchConfiguration('nav_cmd_vel_topic'),

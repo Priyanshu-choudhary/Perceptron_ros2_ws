@@ -61,4 +61,13 @@ stm32_bridge_node:
     use_imu: true
     # Effective, not physical (0.416 m). The calibration constant for heading
     # when use_imu is false. Raise it if wheel-only turns come out short.
-    wheel_separation: 0.416
+    # EFFECTIVE track width, not the geometric one (0.37762 m in the URDF). A
+    # 4-wheel skid-steer scrubs sideways through every turn and so behaves as
+    # though its wheels were further apart, by more as grip falls.
+    #
+    # 0.63 measured with odom_verification_test against 90/180/360 deg turns ON
+    # MARBLE AT 0.25 rad/s, and only valid there - on carpet or rubber the
+    # scrub is smaller and this over-reports the turn. Re-measure per surface.
+    # Was 0.416, which disagreed with the 0.43 the LAN bridge used, so the two
+    # paths reported different yaw from identical wheels.
+    wheel_separation: 0.63
