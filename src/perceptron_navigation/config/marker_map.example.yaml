@@ -31,7 +31,7 @@ boards:
   # square's heading snap between two values.
   wall_north:
     tile_size: 0.06        # side of the BLACK square, metres
-    tile_spacing: 0.08     # CENTRE to CENTRE, not the gap. spacing = size + gap
+    tile_spacing: 0.066    # CENTRE to CENTRE, not the gap. spacing = size + gap
 
     # Which printed id sits in which slot, as seen by someone standing in
     # front of the wall reading the markers. Getting this wrong does not fail

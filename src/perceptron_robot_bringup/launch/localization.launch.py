@@ -35,7 +35,7 @@ Arguments:
     map          path to the .yaml written by map_saver_cli.
                  Default: the packaged room_map.yaml.
     use_jetson   receive sensors over ZeroMQ from the Nano. Default true.
-    jetson_ip    address of the Nano. Default 192.168.1.11.
+    jetson_ip    address of the Nano. Default 192.168.1.6.
     rviz         open RViz. Default true.
     ekf/stm32    as robot.launch.py
     lidar_port   override port detection (use_jetson:=false only)
@@ -99,6 +99,8 @@ def generate_launch_description():
     rviz = LaunchConfiguration('rviz')
     ekf = LaunchConfiguration('ekf')
     stm32 = LaunchConfiguration('stm32')
+    aruco = LaunchConfiguration('aruco')
+    marker_map = LaunchConfiguration('marker_map')
 
     args = [
         DeclareLaunchArgument(
@@ -106,12 +108,22 @@ def generate_launch_description():
             description='path to map .yaml'),
         DeclareLaunchArgument('use_jetson', default_value='true',
                               description='sensors arrive over ZeroMQ from the Nano'),
-        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.11'),
+        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.6'),
         DeclareLaunchArgument('lidar_port', default_value=''),
         DeclareLaunchArgument('stm32_port', default_value=''),
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('ekf', default_value='true'),
         DeclareLaunchArgument('stm32', default_value='true'),
+        DeclareLaunchArgument(
+            'aruco', default_value='true',
+            description='seed AMCL from a surveyed wall board instead of a '
+                        'hand-placed 2D Pose Estimate'),
+        DeclareLaunchArgument(
+            'marker_map',
+            default_value=os.path.expanduser(
+                '~/perceptron_test_ws/config/marker_map.yaml'),
+            description='surveyed board poses, written by '
+                        'marker_localization.launch.py mode:=teach'),
         OpaqueFunction(function=_resolve_ports),
     ]
 
@@ -216,6 +228,25 @@ def generate_launch_description():
         parameters=[{'use_sim_time': False, 'autostart': True,
                      'node_names': ['map_server', 'amcl']}])
 
+    # The answer to "where am I?" at startup, which is the one question AMCL
+    # cannot answer for itself -- hence set_initial_pose: False above. This node
+    # solves a surveyed wall board and hands the result over on /initialpose,
+    # then stops: AMCL owns map -> odom and beats this everywhere except at
+    # startup. /aruco/relocalize arms another seed.
+    #
+    # It needs jetson_robot_bridge.py running WITHOUT --no-aruco, because the
+    # corner pixels arrive over ZMQ rather than as an image topic. If
+    # marker_map.yaml has not been surveyed yet the node logs INERT every ten
+    # seconds and changes nothing else -- the robot still localizes by hand.
+    aruco_localizer = Node(
+        package='perceptron_navigation', executable='aruco_localizer_node',
+        name='aruco_localizer_node', output='screen',
+        condition=IfCondition(aruco),
+        parameters=[os.path.join(pkg_nav, 'config', 'aruco_localization.yaml'),
+                    {'use_sim_time': False,
+                     'jetson_ip': jetson_ip,
+                     'marker_map_path': marker_map}])
+
     rviz_node = Node(
         package='rviz2', executable='rviz2', name='rviz2', output='screen',
         condition=IfCondition(rviz), parameters=[{'use_sim_time': False}],
@@ -224,5 +255,6 @@ def generate_launch_description():
 
     return LaunchDescription(args + [
         robot_state_pub, joint_state_pub, jetson_bridge, lidar, stm32_bridge,
-        battery, ekf_node, map_server, amcl, lifecycle, rviz_node,
+        battery, ekf_node, map_server, amcl, lifecycle, aruco_localizer,
+        rviz_node,
     ])

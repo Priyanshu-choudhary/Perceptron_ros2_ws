@@ -1,0 +1,35 @@
+# Surveyed pose of the 2x2 ArUco board, in the room_map frame.
+#
+# HOW ACCURATE IS THIS, HONESTLY
+#
+# Measured from 2 viewpoints that agreed, out of 4 taken. Each viewpoint was
+# localised by scan-matching the live laser against the whole map, NOT by AMCL,
+# whose yaw was about 10 deg out at the time. The survivors agreed to 0.083 m and
+# 0.14 deg, and that is the error bar on the numbers below.
+#
+# A few centimetres is fine for what this is FOR. The pose is handed to AMCL on
+# /initialpose as a starting guess, and AMCL refines it from there; it only has
+# to land in the right basin. It is a better starting point than the hand-placed
+# 2D Pose Estimate it replaces, and its yaw is far better, which is the part
+# AMCL struggles with in a room this symmetric.
+#
+# Re-survey if the board moves or the map is rebuilt: a pose in the "map" frame
+# means nothing without the map it was surveyed against, hence map_reference.
+
+frame_id: map
+map_reference: room_map.yaml
+
+boards:
+  wall_north:
+    tile_size: 0.06        # side of the black square, from the printed PDF
+    tile_spacing: 0.066    # centre to centre = 60 mm tile + 6 mm gap
+    ids:
+      0: top_left
+      1: top_right
+      2: bottom_left
+      3: bottom_right
+    pose:
+      x: 0.7085
+      y: 0.6522
+      z: 0.5863              # height off the floor; measured 0.58 by tape
+      yaw_deg: -111.27        # map direction the board FACE points

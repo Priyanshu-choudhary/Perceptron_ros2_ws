@@ -23,7 +23,7 @@ gets to correct it.
 Arguments:
     mode         teach | localize.  Default localize.
     params       override the parameter file.
-    jetson_ip    default 192.168.1.11, as everywhere else.
+    jetson_ip    default 192.168.1.6, as everywhere else.
     marker_map   path to the surveyed board map (localize mode).
     board_name   which board is being surveyed (teach mode).
     ids          the four marker ids, top-left, top-right, bottom-left,
@@ -64,7 +64,7 @@ def generate_launch_description():
                               choices=['teach', 'localize'],
                               description='survey a board, or use the surveyed ones'),
         DeclareLaunchArgument('params', default_value=default_params),
-        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.11'),
+        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.6'),
         DeclareLaunchArgument(
             'marker_map',
             default_value=os.path.expanduser(
@@ -75,7 +75,7 @@ def generate_launch_description():
             'tile_size', default_value='0.06',
             description='side of the BLACK square in metres, not the printed tile'),
         DeclareLaunchArgument(
-            'tile_spacing', default_value='0.08',
+            'tile_spacing', default_value='0.066',
             description='CENTRE to CENTRE spacing in metres = tile_size + gap'),
         DeclareLaunchArgument(
             'ids', default_value='0,1,2,3',

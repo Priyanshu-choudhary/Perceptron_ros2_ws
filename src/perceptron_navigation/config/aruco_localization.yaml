@@ -16,7 +16,7 @@ aruco_localizer_node:
   ros__parameters:
     use_sim_time: false
 
-    jetson_ip: "192.168.1.11"
+    jetson_ip: "192.168.1.6"
     telemetry_port: 5555
     dictionary_name: "DICT_6X6_250"
 
@@ -71,14 +71,22 @@ teach_marker_node:
   ros__parameters:
     use_sim_time: false
 
-    jetson_ip: "192.168.1.11"
+    jetson_ip: "192.168.1.6"
     telemetry_port: 5555
     output_path: "~/perceptron_test_ws/config/marker_map.yaml"
     map_reference: "room_map.yaml"
 
     board_name: "wall_north"
-    tile_size: 0.06
-    tile_spacing: 0.08              # CENTRE to CENTRE. Measure the print.
+    tile_size: 0.06                 # side of the BLACK square, border included
+    # CENTRE to CENTRE = tile_size + the printed gap, NOT the gap on its own.
+    # Both numbers are from aruco_2x2_60mm_6x6_250.pdf ("60mm markers, 6mm
+    # separation") and were then confirmed against the board itself: sweeping
+    # this value against the live corner stream bottoms out at 0.066 with an
+    # 0.31 px RMS residual, against 0.67 px at 0.065 and 0.41 px at 0.067.
+    # That sharp a minimum also says the sheet was printed at 100% rather than
+    # "fit to page". Get this wrong and the board model is skewed; the pose
+    # that falls out is still plausible-looking, which is the whole problem.
+    tile_spacing: 0.066
     # Slot order: top_left, top_right, bottom_left, bottom_right, as seen by
     # someone standing in front of the wall.
     ids: "0,1,2,3"
