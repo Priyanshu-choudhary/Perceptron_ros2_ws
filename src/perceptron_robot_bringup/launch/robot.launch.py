@@ -1,8 +1,9 @@
 """Real lidar + real STM32 ECU via ZeroMQ Jetson LAN Bridge or direct USB Serial.
 
     ros2 launch perceptron_robot_bringup robot.launch.py
-    ros2 launch perceptron_robot_bringup robot.launch.py use_jetson:=true jetson_ip:=192.168.1.11
+    ros2 launch perceptron_robot_bringup robot.launch.py use_jetson:=true jetson_ip:=192.168.1.6
     ros2 launch perceptron_robot_bringup robot.launch.py use_jetson:=false (for local USB cables)
+    ros2 launch perceptron_robot_bringup robot.launch.py jetson_ip:=192.168.1.6 ekf:=false  (lidar + wheels only)
 
 This starts, in dependency order:
     robot_state_publisher   the URDF, so RViz has a model and TF has the joints
@@ -15,10 +16,13 @@ This starts, in dependency order:
 
 Arguments:
     use_jetson   connect via ZeroMQ to Jetson Nano bridge over Wi-Fi. Default true.
-    jetson_ip    IP address of the Jetson Nano. Default 192.168.1.11.
+    jetson_ip    IP address of the Jetson Nano. Default 192.168.1.6.
     slam         run slam_toolbox. Default true. false gives sensors only.
     rviz         open RViz. Default true.
-    ekf          run the EKF. Default true.
+    ekf          run the EKF. Default true. false switches the IMU off COMPLETELY
+                 as well: no EKF, no /imu/data_raw, no gyro conditioning, and
+                 odom -> base_footprint comes straight from the wheel encoders,
+                 so slam_toolbox builds the map from lidar + wheels alone.
     stm32        run the ECU bridge when use_jetson is false. Default true.
     lidar_port   override port detection when use_jetson is false.
     stm32_port   override port detection when use_jetson is false.
@@ -89,13 +93,14 @@ def generate_launch_description():
     args = [
         DeclareLaunchArgument('use_jetson', default_value='true',
                               description='Connect via ZeroMQ to Jetson Nano over LAN'),
-        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.11',
+        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.6',
                               description='IP address of Jetson Nano on local network'),
         DeclareLaunchArgument('lidar_port', default_value=''),
         DeclareLaunchArgument('stm32_port', default_value=''),
         DeclareLaunchArgument('rviz', default_value='true'),
         DeclareLaunchArgument('slam', default_value='true'),
-        DeclareLaunchArgument('ekf', default_value='true'),
+        DeclareLaunchArgument('ekf', default_value='true',
+                              description='false = lidar + wheels only: no EKF and no IMU at all'),
         DeclareLaunchArgument('stm32', default_value='true'),
         DeclareLaunchArgument('use_imu', default_value='true',
                               description='Enable IMU (set false to disable IMU and run encoders only)'),
@@ -105,15 +110,27 @@ def generate_launch_description():
     ]
 
 
+    # ekf:=false means lidar + wheels ONLY, so it switches the IMU off too.
+    #
+    # The EKF is the only thing on this path that reads the gyro: the bridge's
+    # own odometry dead-reckons from the wheel-derived vx/wz and never looks at
+    # the IMU. Leaving the IMU on without the EKF therefore changes nothing
+    # about the map, while still streaming an unused topic and running the gyro
+    # ZUPT and bias tracker for nobody -- and it made ekf:=false a half-switch
+    # that looked like "IMU off" in RViz's topic list but was not.
+    #
+    # So IMU, EKF, and who owns odom -> base_footprint are now ONE decision:
+    #   ekf:=true  with imu on       -> EKF fuses wheels + gyro, and owns the TF
+    #   ekf:=false, or imu:=false    -> no IMU, no EKF, the bridge owns the TF
     enable_imu = PythonExpression([
-        "'", use_imu, "'.lower() in ('true', '1') and '", imu, "'.lower() in ('true', '1')"
+        "'", ekf, "'.lower() in ('true', '1') and '",
+        use_imu, "'.lower() in ('true', '1') and '",
+        imu, "'.lower() in ('true', '1')"
     ])
-    bridge_publish_tf = PythonExpression([
-        "not (", enable_imu, " and '", ekf, "'.lower() in ('true', '1'))"
-    ])
-    run_ekf = PythonExpression([
-        "'", ekf, "'.lower() in ('true', '1') and ", enable_imu
-    ])
+    # Exactly one node may publish odom -> base_footprint. Two publishers make
+    # tf2 interleave them and the robot visibly teleports between two poses.
+    bridge_publish_tf = PythonExpression(["not ", enable_imu])
+    run_ekf = enable_imu
 
     robot_description = ParameterValue(
         Command(['xacro "', xacro_file, '" is_sim:=false']), value_type=str)
