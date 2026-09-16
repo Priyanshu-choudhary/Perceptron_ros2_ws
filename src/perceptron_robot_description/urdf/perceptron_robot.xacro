@@ -121,14 +121,21 @@
     matching stays well conditioned. Off-centre mounting is the usual reason a
     map smears every time the robot spins.
 
-    The scan plane must also clear the camera, whose body tops out at 0.1821 m
-    above the ground. lidar_z below is in base_link, so add wheel_radius for the
-    height above the floor: 0.1475 + 0.0625 = 0.21 m.
+    lidar_z below is in base_link, so add wheel_radius for the height above the
+    floor: 0.2775 + 0.0625 = 0.34 m, measured on 2026-09-16. It read 0.1475
+    (0.21 m) before that, which was a placeholder nobody had ever measured, and
+    it was inconsistent with the camera bolted to the top of this same lidar
+    with its lens at 0.42 m. A wrong scan HEIGHT is invisible to 2D
+    localisation, because the walls are vertical so only the scan's x/y is ever
+    used, which is exactly why it sat wrong for so long.
+
+    Note the support post below derives its length from lidar_z, so it follows
+    this number automatically.
     Change lidar_z / lidar_x / lidar_y to match where you actually bolt it on.
   -->
   <xacro:property name="lidar_x" value="0.0"/>
   <xacro:property name="lidar_y" value="0.0"/>
-  <xacro:property name="lidar_z" value="0.1475"/>
+  <xacro:property name="lidar_z" value="0.2775"/>
   <xacro:property name="lidar_body_r" value="0.0298"/>
   <xacro:property name="lidar_body_h" value="0.0400"/>
   <!-- scan plane sits this far above the underside of the sensor body -->
@@ -285,9 +292,28 @@
   <!-- ==================== CAMERA ==================== -->
   <!--
     camera.stl bbox in mesh coords is x[0.285,0.305] y[0.120,0.210] z[0.111,0.151],
-    a 20 x 90 x 40 mm body sitting on the front edge of the chassis.
+    a 20 x 90 x 40 mm body. The visual origin below is the negative of that bbox
+    centre, so the mesh renders centred on camera_link wherever the joint puts it.
     camera_link has +X pointing out of the lens (Gazebo convention) and +Z up.
     The old model had rpy="-pi -pi/2 0" here, which aimed the lens at the sky.
+
+    THE CAMERA IS BOLTED ON TOP OF THE LIDAR, not on the front of the chassis.
+    Until 2026-09-16 this joint said xyz="0.18314 0.01381 0.0996" rpy="0 0 0",
+    describing an older front mount, and that error silently broke every
+    absolute pose computed from a marker: the board came out ~19 cm too far and
+    ~10 cm too low. It hid for a long time because a pure POINTING error barely
+    changes the slant range: the marker decodes, the reprojection residual
+    stays at 0.3 px, the pose looks plausible, and only the composed map-frame
+    position is wrong, by an amount that grows with distance.
+
+    The numbers below were measured, not modelled:
+      * lens 0.42 m above the floor, on the lidar's axis (tape measure)
+      * pitch -0.0703 rad solved from five viewpoints spanning 0.49-1.57 m, by
+        requiring the board to come out at its measured 0.58 m height every
+        time. Residual RMS 0.0025 m, against 0.0736 m at pitch 0.
+      * cross-checked against the lidar's own view of the wall the board is on,
+        which was NOT used in the solve: the two agree to 0.0004 m.
+    Re-measure and re-solve if the camera is ever remounted.
   -->
   <link name="camera_link">
     <inertial>
@@ -316,7 +342,9 @@
   </link>
 
   <joint name="camera_joint" type="fixed">
-    <origin xyz="0.18314 0.01381 0.0996" rpy="0 0 0"/>
+    <!-- z is the measured 0.42 m lens height minus wheel_radius, because this
+         origin is in base_link and base_link sits on the axles. -->
+    <origin xyz="0 0 ${0.42 - wheel_radius}" rpy="0 -0.07027 0"/>
     <parent link="base_link"/>
     <child link="camera_link"/>
   </joint>
