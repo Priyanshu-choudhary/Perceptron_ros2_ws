@@ -84,7 +84,24 @@ class JetsonClock:
         Drift the other way is absorbed as the window slides.
     """
 
-    def __init__(self, window_s=30.0):
+    def __init__(self, window_s=3.0):
+        # THE WINDOW MUST BE SHORTER THAN max_sensor_age / clock_drift_rate.
+        #
+        # The offset is the minimum over the window, so it is up to window_s
+        # old. If the two clocks drift apart at r, every message is reported
+        # as r * window_s late even on a perfect network, and once that
+        # exceeds max_sensor_age EVERY sensor payload is dropped and the robot
+        # goes silently blind.
+        #
+        # That is not hypothetical: on 2026-09-16 WSL's clock was found to run
+        # 2.2% slow (22 ms/s), which at the old window_s of 30 s manufactured
+        # 660 ms of phantom age against a 500 ms limit. /scan and /odom stopped
+        # publishing entirely while the bridge sat there looking healthy.
+        # At 3 s the same drift costs 66 ms, comfortably inside the limit.
+        #
+        # Shortening it is close to free: the stream runs at ~70 Hz, so 3 s
+        # still holds ~200 samples to pick a minimum from, and the estimator
+        # only needs one lightly-delayed sample to be right.
         self._window_s = float(window_s)
         # (t_recv, diff) held with diff strictly increasing: a monotonic deque.
         self._mono = collections.deque()
@@ -114,7 +131,7 @@ class JetsonBridgeNode(Node):
         super().__init__('jetson_bridge_node')
 
         # Declare parameters
-        self.declare_parameter('jetson_ip', '192.168.1.11')
+        self.declare_parameter('jetson_ip', '192.168.1.6')
         self.declare_parameter('telemetry_port', 5555)
         self.declare_parameter('cmd_port', 5556)
         self.declare_parameter('laser_frame_id', 'laser_frame')
@@ -126,8 +143,8 @@ class JetsonBridgeNode(Node):
         self.declare_parameter('use_imu', True)
         # Drop sensor payloads that reached us later than this. A late scan is
         # worse than no scan: SLAM acts on it and rewrites the map. 0 disables.
-        self.declare_parameter('max_sensor_age', 0.25)
-        self.declare_parameter('clock_window_s', 30.0)
+        self.declare_parameter('max_sensor_age', 0.5)
+        self.declare_parameter('clock_window_s', 3.0)
         # The same gyro conditioning stm32_bridge_node applies. Without this the
         # LAN-bridge path published a raw, biased, unscaled gyro with an all-zero
         # covariance - and since robot.launch.py defaults to use_jetson:=true,
