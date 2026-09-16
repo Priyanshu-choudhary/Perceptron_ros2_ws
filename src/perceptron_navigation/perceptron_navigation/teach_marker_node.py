@@ -76,7 +76,7 @@ class TeachMarkerNode(Node):
     def __init__(self):
         super().__init__('teach_marker_node')
 
-        self.declare_parameter('jetson_ip', '192.168.1.11')
+        self.declare_parameter('jetson_ip', '192.168.1.6')
         self.declare_parameter('telemetry_port', 5555)
         self.declare_parameter('output_path',
                                '~/perceptron_test_ws/config/marker_map.yaml')

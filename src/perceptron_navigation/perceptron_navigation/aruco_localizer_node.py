@@ -81,7 +81,7 @@ class ArucoLocalizerNode(Node):
     def __init__(self):
         super().__init__('aruco_localizer_node')
 
-        self.declare_parameter('jetson_ip', '192.168.1.11')
+        self.declare_parameter('jetson_ip', '192.168.1.6')
         self.declare_parameter('telemetry_port', 5555)
         self.declare_parameter('marker_map_path', '')
         self.declare_parameter('dictionary_name', 'DICT_6X6_250')

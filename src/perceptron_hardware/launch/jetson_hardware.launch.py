@@ -15,7 +15,7 @@ def generate_launch_description():
 
     jetson_ip_arg = DeclareLaunchArgument(
         'jetson_ip',
-        default_value='192.168.1.11',
+        default_value='192.168.1.6',
         description='Jetson Nano Wi-Fi IP address'
     )
 

@@ -49,7 +49,7 @@ class JetsonBridgeNode(Node):
         super().__init__('jetson_bridge_node')
 
         # Declare parameters
-        self.declare_parameter('jetson_ip', '192.168.1.11')
+        self.declare_parameter('jetson_ip', '192.168.1.6')
         self.declare_parameter('telemetry_port', 5555)
         self.declare_parameter('cmd_port', 5556)
         self.declare_parameter('laser_frame_id', 'laser_frame')

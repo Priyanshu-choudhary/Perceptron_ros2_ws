@@ -50,7 +50,7 @@ FIRST RUN
 ARGUMENTS
 
     map          .yaml written by map_saver_cli. Default: room2_map.
-    jetson_ip    address of the Nano. Default 192.168.1.11.
+    jetson_ip    address of the Nano. Default 192.168.1.6.
     rviz         open RViz. Default true.
     nav_profile  dwb (default) = NavFn + DWB. mppi = SmacPlanner2D + MPPI,
                  which handles skid-steer scrub better but costs more CPU.
@@ -89,7 +89,7 @@ def generate_launch_description():
             default_value=os.path.join(pkg_nav, 'maps', 'room2_map.yaml'),
             description='path to the map .yaml'),
         DeclareLaunchArgument('use_jetson', default_value='true'),
-        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.11'),
+        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.6'),
         DeclareLaunchArgument('lidar_port', default_value=''),
         DeclareLaunchArgument('stm32_port', default_value=''),
         DeclareLaunchArgument('rviz', default_value='true'),
