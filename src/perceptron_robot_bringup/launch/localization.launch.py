@@ -35,7 +35,7 @@ Arguments:
     map          path to the .yaml written by map_saver_cli.
                  Default: the packaged room_map.yaml.
     use_jetson   receive sensors over ZeroMQ from the Nano. Default true.
-    jetson_ip    address of the Nano. Default 192.168.1.6.
+    jetson_ip    address of the Nano. Default 192.168.1.7 .
     rviz         open RViz. Default true.
     ekf/stm32    as robot.launch.py
     lidar_port   override port detection (use_jetson:=false only)
@@ -93,7 +93,11 @@ def generate_launch_description():
 
     map_yaml = LaunchConfiguration('map')
     use_jetson = LaunchConfiguration('use_jetson')
+    jetson = LaunchConfiguration('jetson')
     jetson_ip = LaunchConfiguration('jetson_ip')
+    resolved_jetson_ip = PythonExpression([
+        "'", jetson, "'.strip() if '", jetson, "'.strip() != '' else '", jetson_ip, "'.strip()"
+    ])
     lidar_port = LaunchConfiguration('lidar_port')
     stm32_port = LaunchConfiguration('stm32_port')
     rviz = LaunchConfiguration('rviz')
@@ -108,7 +112,11 @@ def generate_launch_description():
             description='path to map .yaml'),
         DeclareLaunchArgument('use_jetson', default_value='true',
                               description='sensors arrive over ZeroMQ from the Nano'),
-        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.6'),
+        DeclareLaunchArgument('jetson', default_value='',
+                              description='Jetson Nano IP address (e.g. jetson:=192.168.1.7)'),
+        DeclareLaunchArgument('jetson_ip',
+                              default_value=os.environ.get('JETSON_IP', '192.168.1.7'),
+                              description='Jetson Nano IP address (alias for jetson)'),
         DeclareLaunchArgument('lidar_port', default_value=''),
         DeclareLaunchArgument('stm32_port', default_value=''),
         DeclareLaunchArgument('rviz', default_value='true'),
@@ -154,7 +162,7 @@ def generate_launch_description():
             # gyro_params.yaml FIRST so the inline dict can still override it.
             os.path.join(pkg_hw, 'config', 'gyro_params.yaml'),
             {
-                'jetson_ip': jetson_ip,
+                'jetson_ip': resolved_jetson_ip,
                 'telemetry_port': 5555,
                 'cmd_port': 5556,
                 'laser_frame_id': 'laser_link',
@@ -244,7 +252,7 @@ def generate_launch_description():
         condition=IfCondition(aruco),
         parameters=[os.path.join(pkg_nav, 'config', 'aruco_localization.yaml'),
                     {'use_sim_time': False,
-                     'jetson_ip': jetson_ip,
+                     'jetson_ip': resolved_jetson_ip,
                      'marker_map_path': marker_map}])
 
     rviz_node = Node(

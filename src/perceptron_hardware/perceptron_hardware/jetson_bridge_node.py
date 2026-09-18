@@ -11,6 +11,7 @@ Translates binary ZMQ streams into native ROS 2 topics:
 """
 
 import collections
+import os
 import math
 import time
 import threading
@@ -131,7 +132,9 @@ class JetsonBridgeNode(Node):
         super().__init__('jetson_bridge_node')
 
         # Declare parameters
-        self.declare_parameter('jetson_ip', '192.168.1.6')
+        default_jetson_ip = os.environ.get('JETSON_IP', '192.168.1.7')
+        self.declare_parameter('jetson', '')
+        self.declare_parameter('jetson_ip', default_jetson_ip)
         self.declare_parameter('telemetry_port', 5555)
         self.declare_parameter('cmd_port', 5556)
         self.declare_parameter('laser_frame_id', 'laser_frame')
@@ -151,7 +154,9 @@ class JetsonBridgeNode(Node):
         # that was the path the robot actually ran.
         GyroConditioner.declare_parameters(self)
 
-        self.jetson_ip = self.get_parameter('jetson_ip').value
+        jetson_param = str(self.get_parameter('jetson').value or '').strip()
+        jetson_ip_param = str(self.get_parameter('jetson_ip').value or '').strip()
+        self.jetson_ip = jetson_param if jetson_param else (jetson_ip_param or default_jetson_ip)
         self.telemetry_port = self.get_parameter('telemetry_port').value
         self.cmd_port = self.get_parameter('cmd_port').value
         self.laser_frame_id = self.get_parameter('laser_frame_id').value

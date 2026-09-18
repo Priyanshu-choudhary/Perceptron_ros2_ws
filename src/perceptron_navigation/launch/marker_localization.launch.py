@@ -23,7 +23,7 @@ gets to correct it.
 Arguments:
     mode         teach | localize.  Default localize.
     params       override the parameter file.
-    jetson_ip    default 192.168.1.6, as everywhere else.
+    jetson_ip    default 192.168.1.7 , as everywhere else.
     marker_map   path to the surveyed board map (localize mode).
     board_name   which board is being surveyed (teach mode).
     ids          the four marker ids, top-left, top-right, bottom-left,
@@ -48,7 +48,11 @@ def generate_launch_description():
 
     mode = LaunchConfiguration('mode')
     params = LaunchConfiguration('params')
+    jetson = LaunchConfiguration('jetson')
     jetson_ip = LaunchConfiguration('jetson_ip')
+    resolved_jetson_ip = PythonExpression([
+        "'", jetson, "'.strip() if '", jetson, "'.strip() != '' else '", jetson_ip, "'.strip()"
+    ])
     marker_map = LaunchConfiguration('marker_map')
     board_name = LaunchConfiguration('board_name')
     tile_size = LaunchConfiguration('tile_size')
@@ -64,7 +68,11 @@ def generate_launch_description():
                               choices=['teach', 'localize'],
                               description='survey a board, or use the surveyed ones'),
         DeclareLaunchArgument('params', default_value=default_params),
-        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.6'),
+        DeclareLaunchArgument('jetson', default_value='',
+                              description='Jetson Nano IP address (e.g. jetson:=192.168.1.7)'),
+        DeclareLaunchArgument('jetson_ip',
+                              default_value=os.environ.get('JETSON_IP', '192.168.1.7'),
+                              description='Jetson Nano IP address (alias for jetson)'),
         DeclareLaunchArgument(
             'marker_map',
             default_value=os.path.expanduser(
@@ -91,7 +99,7 @@ def generate_launch_description():
         name='aruco_localizer_node', output='screen', condition=localising,
         parameters=[params, {
             'use_sim_time': False,
-            'jetson_ip': jetson_ip,
+            'jetson_ip': resolved_jetson_ip,
             'marker_map_path': marker_map,
         }])
 
@@ -100,7 +108,7 @@ def generate_launch_description():
         name='teach_marker_node', output='screen', condition=teaching,
         parameters=[params, {
             'use_sim_time': False,
-            'jetson_ip': jetson_ip,
+            'jetson_ip': resolved_jetson_ip,
             'board_name': board_name,
             'ids': ids,
             'tile_size': ParameterValue(tile_size, value_type=float),

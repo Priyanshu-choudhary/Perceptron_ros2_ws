@@ -50,7 +50,7 @@ FIRST RUN
 ARGUMENTS
 
     map          .yaml written by map_saver_cli. Default: room2_map.
-    jetson_ip    address of the Nano. Default 192.168.1.6.
+    jetson_ip    address of the Nano. Default 192.168.1.7 .
     rviz         open RViz. Default true.
     nav_profile  dwb (default) = NavFn + DWB. mppi = SmacPlanner2D + MPPI,
                  which handles skid-steer scrub better but costs more CPU.
@@ -65,7 +65,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 
 
 def generate_launch_description():
@@ -74,7 +74,11 @@ def generate_launch_description():
 
     map_yaml = LaunchConfiguration('map')
     use_jetson = LaunchConfiguration('use_jetson')
+    jetson = LaunchConfiguration('jetson')
     jetson_ip = LaunchConfiguration('jetson_ip')
+    resolved_jetson_ip = PythonExpression([
+        "'", jetson, "'.strip() if '", jetson, "'.strip() != '' else '", jetson_ip, "'.strip()"
+    ])
     lidar_port = LaunchConfiguration('lidar_port')
     stm32_port = LaunchConfiguration('stm32_port')
     rviz = LaunchConfiguration('rviz')
@@ -89,7 +93,11 @@ def generate_launch_description():
             default_value=os.path.join(pkg_nav, 'maps', 'room2_map.yaml'),
             description='path to the map .yaml'),
         DeclareLaunchArgument('use_jetson', default_value='true'),
-        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.6'),
+        DeclareLaunchArgument('jetson', default_value='',
+                              description='Jetson Nano IP address (e.g. jetson:=192.168.1.7)'),
+        DeclareLaunchArgument('jetson_ip',
+                              default_value=os.environ.get('JETSON_IP', '192.168.1.7'),
+                              description='Jetson Nano IP address (alias for jetson)'),
         DeclareLaunchArgument('lidar_port', default_value=''),
         DeclareLaunchArgument('stm32_port', default_value=''),
         DeclareLaunchArgument('rviz', default_value='true'),
@@ -107,7 +115,8 @@ def generate_launch_description():
         launch_arguments={
             'map': map_yaml,
             'use_jetson': use_jetson,
-            'jetson_ip': jetson_ip,
+            'jetson': resolved_jetson_ip,
+            'jetson_ip': resolved_jetson_ip,
             'lidar_port': lidar_port,
             'stm32_port': stm32_port,
             'rviz': rviz,

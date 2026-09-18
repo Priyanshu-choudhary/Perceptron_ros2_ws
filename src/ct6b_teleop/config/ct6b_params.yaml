@@ -1,0 +1,31 @@
+ct6b_teleop_node:
+  ros__parameters:
+    # Serial Port Settings
+    serial_port: "/dev/ttyUSB0"       # CT6B USB-Serial port (attached via usbipd or native)
+    baud_rate: 115200                 # Standard FS-CT6B baud rate
+    auto_detect_port: true            # Search for /dev/ttyUSB* or /dev/ttyACM* if default port is missing
+
+    # Output Topic & Rate
+    cmd_vel_topic: "/cmd_vel"         # Target cmd_vel topic
+    publish_rate_hz: 10.0             # Publishing frequency (Hz) - set to 10Hz as required
+
+    # Velocity Limits
+    max_linear_speed: 0.5             # Max linear velocity (m/s)
+    max_angular_speed: 1.0            # Max angular velocity (rad/s)
+
+    # Channel Assignments (0-indexed: 0=Ch1 Roll, 1=Ch2 Pitch, 2=Ch3 Throttle, 3=Ch4 Yaw)
+    channel_pitch: 1                  # Pitch stick (forward/backward)
+    channel_roll: 0                   # Roll stick (left/right turn)
+
+    # PWM Range & Deadzone
+    center_pwm: 1500                  # Center neutral stick value (~1500 us)
+    min_pwm: 1000                     # Minimum stick value (~1000 us)
+    max_pwm: 2000                     # Maximum stick value (~2000 us)
+    deadzone: 40                      # Neutral deadzone (+/- us around center_pwm to prevent creeping)
+
+    # Stick Direction Inversion
+    invert_pitch: true                # Set true to reverse pitch (stick UP moves robot forward)
+    invert_roll: false                # Set true if stick LEFT turns robot right
+
+    # Safety
+    watchdog_timeout: 0.5             # Stop robot (publish 0 cmd_vel) if no valid packet for >0.5s

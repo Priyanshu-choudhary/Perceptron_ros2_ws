@@ -76,7 +76,9 @@ class TeachMarkerNode(Node):
     def __init__(self):
         super().__init__('teach_marker_node')
 
-        self.declare_parameter('jetson_ip', '192.168.1.6')
+        default_jetson_ip = os.environ.get('JETSON_IP', '192.168.1.7')
+        self.declare_parameter('jetson', '')
+        self.declare_parameter('jetson_ip', default_jetson_ip)
         self.declare_parameter('telemetry_port', 5555)
         self.declare_parameter('output_path',
                                '~/perceptron_test_ws/config/marker_map.yaml')
@@ -166,7 +168,10 @@ class TeachMarkerNode(Node):
         self.create_service(Trigger, '/aruco/teach/reset', self._reset_cb)
 
         self.running = True
-        self.jetson_url = 'tcp://%s:%d' % (get('jetson_ip').value,
+        j_val = str(get('jetson').value or '').strip()
+        j_ip_val = str(get('jetson_ip').value or '').strip()
+        target_ip = j_val if j_val else (j_ip_val or default_jetson_ip)
+        self.jetson_url = 'tcp://%s:%d' % (target_ip,
                                            int(get('telemetry_port').value))
         threading.Thread(target=self._zmq_worker, daemon=True).start()
         self.create_timer(0.05, self._process_inbox)

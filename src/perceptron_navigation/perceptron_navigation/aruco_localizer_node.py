@@ -36,6 +36,7 @@ than `max_seed_speed` -- a stationary robot's pose does not go stale.
 """
 
 import math
+import os
 import threading
 from collections import deque
 
@@ -81,7 +82,9 @@ class ArucoLocalizerNode(Node):
     def __init__(self):
         super().__init__('aruco_localizer_node')
 
-        self.declare_parameter('jetson_ip', '192.168.1.6')
+        default_jetson_ip = os.environ.get('JETSON_IP', '192.168.1.7')
+        self.declare_parameter('jetson', '')
+        self.declare_parameter('jetson_ip', default_jetson_ip)
         self.declare_parameter('telemetry_port', 5555)
         self.declare_parameter('marker_map_path', '')
         self.declare_parameter('dictionary_name', 'DICT_6X6_250')
@@ -203,7 +206,10 @@ class ArucoLocalizerNode(Node):
         self.running = True
         self.zmq_thread = None
         if self.marker_map is not None:
-            self.jetson_url = 'tcp://%s:%d' % (get('jetson_ip').value,
+            j_val = str(get('jetson').value or '').strip()
+            j_ip_val = str(get('jetson_ip').value or '').strip()
+            target_ip = j_val if j_val else (j_ip_val or default_jetson_ip)
+            self.jetson_url = 'tcp://%s:%d' % (target_ip,
                                                int(get('telemetry_port').value))
             self.zmq_thread = threading.Thread(target=self._zmq_worker, daemon=True)
             self.zmq_thread.start()

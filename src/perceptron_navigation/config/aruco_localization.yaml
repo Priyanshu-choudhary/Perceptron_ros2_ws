@@ -16,7 +16,7 @@ aruco_localizer_node:
   ros__parameters:
     use_sim_time: false
 
-    jetson_ip: "192.168.1.6"
+    jetson_ip: "192.168.1.7"
     telemetry_port: 5555
     dictionary_name: "DICT_6X6_250"
 
@@ -71,7 +71,7 @@ teach_marker_node:
   ros__parameters:
     use_sim_time: false
 
-    jetson_ip: "192.168.1.6"
+    jetson_ip: "192.168.1.7"
     telemetry_port: 5555
     output_path: "~/perceptron_test_ws/config/marker_map.yaml"
     map_reference: "room_map.yaml"

@@ -1,9 +1,9 @@
 """Real lidar + real STM32 ECU via ZeroMQ Jetson LAN Bridge or direct USB Serial.
 
     ros2 launch perceptron_robot_bringup robot.launch.py
-    ros2 launch perceptron_robot_bringup robot.launch.py use_jetson:=true jetson_ip:=192.168.1.6
+    ros2 launch perceptron_robot_bringup robot.launch.py use_jetson:=true jetson_ip:=192.168.1.7 
     ros2 launch perceptron_robot_bringup robot.launch.py use_jetson:=false (for local USB cables)
-    ros2 launch perceptron_robot_bringup robot.launch.py jetson_ip:=192.168.1.6 ekf:=false  (lidar + wheels only)
+    ros2 launch perceptron_robot_bringup robot.launch.py jetson_ip:=192.168.1.7 ekf:=false  (lidar + wheels only)
 
 This starts, in dependency order:
     robot_state_publisher   the URDF, so RViz has a model and TF has the joints
@@ -16,7 +16,7 @@ This starts, in dependency order:
 
 Arguments:
     use_jetson   connect via ZeroMQ to Jetson Nano bridge over Wi-Fi. Default true.
-    jetson_ip    IP address of the Jetson Nano. Default 192.168.1.6.
+    jetson_ip    IP address of the Jetson Nano. Default 192.168.1.7 .
     slam         run slam_toolbox. Default true. false gives sensors only.
     rviz         open RViz. Default true.
     ekf          run the EKF. Default true. false switches the IMU off COMPLETELY
@@ -80,7 +80,11 @@ def generate_launch_description():
     xacro_file = os.path.join(pkg_desc, 'urdf', 'perceptron_robot.xacro')
 
     use_jetson = LaunchConfiguration('use_jetson')
+    jetson = LaunchConfiguration('jetson')
     jetson_ip = LaunchConfiguration('jetson_ip')
+    resolved_jetson_ip = PythonExpression([
+        "'", jetson, "'.strip() if '", jetson, "'.strip() != '' else '", jetson_ip, "'.strip()"
+    ])
     lidar_port = LaunchConfiguration('lidar_port')
     stm32_port = LaunchConfiguration('stm32_port')
     rviz = LaunchConfiguration('rviz')
@@ -93,7 +97,10 @@ def generate_launch_description():
     args = [
         DeclareLaunchArgument('use_jetson', default_value='true',
                               description='Connect via ZeroMQ to Jetson Nano over LAN'),
-        DeclareLaunchArgument('jetson_ip', default_value='192.168.1.6',
+        DeclareLaunchArgument('jetson', default_value='',
+                              description='Jetson Nano IP address (e.g. jetson:=192.168.1.7)'),
+        DeclareLaunchArgument('jetson_ip',
+                              default_value=os.environ.get('JETSON_IP', '192.168.1.7'),
                               description='IP address of Jetson Nano on local network'),
         DeclareLaunchArgument('lidar_port', default_value=''),
         DeclareLaunchArgument('stm32_port', default_value=''),
@@ -167,7 +174,7 @@ def generate_launch_description():
             # actually runs.
             os.path.join(pkg_hw, 'config', 'gyro_params.yaml'),
             {
-                'jetson_ip': jetson_ip,
+                'jetson_ip': resolved_jetson_ip,
                 'telemetry_port': 5555,
                 'cmd_port': 5556,
                 'laser_frame_id': 'laser_link',

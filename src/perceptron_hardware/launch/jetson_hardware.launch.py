@@ -1,7 +1,7 @@
 import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import Command, LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from ament_index_python.packages import get_package_share_directory
@@ -13,11 +13,21 @@ def generate_launch_description():
 
     xacro_file = os.path.join(pkg_desc, 'urdf', 'perceptron_robot.xacro')
 
+    jetson_arg = DeclareLaunchArgument(
+        'jetson',
+        default_value='',
+        description='Jetson Nano IP address (e.g. jetson:=192.168.1.7)'
+    )
     jetson_ip_arg = DeclareLaunchArgument(
         'jetson_ip',
-        default_value='192.168.1.6',
-        description='Jetson Nano Wi-Fi IP address'
+        default_value=os.environ.get('JETSON_IP', '192.168.1.7'),
+        description='Jetson Nano Wi-Fi IP address (alias for jetson)'
     )
+    resolved_jetson_ip = PythonExpression([
+        "'", LaunchConfiguration('jetson'), "'.strip() if '",
+        LaunchConfiguration('jetson'), "'.strip() != '' else '",
+        LaunchConfiguration('jetson_ip'), "'.strip()"
+    ])
 
     publish_tf_arg = DeclareLaunchArgument(
         'publish_tf',
@@ -43,7 +53,7 @@ def generate_launch_description():
         executable='jetson_bridge_node',
         name='jetson_bridge_node',
         parameters=[{
-            'jetson_ip': LaunchConfiguration('jetson_ip'),
+            'jetson_ip': resolved_jetson_ip,
             'telemetry_port': 5555,
             'cmd_port': 5556,
             'laser_frame_id': 'laser_frame',
@@ -68,6 +78,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        jetson_arg,
         jetson_ip_arg,
         publish_tf_arg,
         robot_state_pub,
