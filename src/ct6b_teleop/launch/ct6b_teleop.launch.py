@@ -42,7 +42,7 @@ def generate_launch_description():
 
     invert_roll_arg = DeclareLaunchArgument(
         'invert_roll',
-        default_value='false',
+        default_value='true',
         description='Reverse roll direction'
     )
 

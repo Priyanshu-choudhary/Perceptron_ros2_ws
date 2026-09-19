@@ -41,7 +41,7 @@ class CT6BTeleopNode(Node):
         self.declare_parameter('max_pwm', 2000)
         self.declare_parameter('deadzone', 40)
         self.declare_parameter('invert_pitch', True)
-        self.declare_parameter('invert_roll', False)
+        self.declare_parameter('invert_roll', True)
         self.declare_parameter('watchdog_timeout', 0.5)
 
         # Retrieve parameters
@@ -58,8 +58,14 @@ class CT6BTeleopNode(Node):
         self.min_pwm = self.get_parameter('min_pwm').get_parameter_value().integer_value
         self.max_pwm = self.get_parameter('max_pwm').get_parameter_value().integer_value
         self.deadzone = self.get_parameter('deadzone').get_parameter_value().integer_value
-        self.invert_pitch = self.get_parameter('invert_pitch').get_parameter_value().bool_value
-        self.invert_roll = self.get_parameter('invert_roll').get_parameter_value().bool_value
+
+        # Handle boolean or string inputs (e.g. from launch LaunchConfiguration strings)
+        raw_pitch = self.get_parameter('invert_pitch').value
+        self.invert_pitch = (str(raw_pitch).lower() in ('true', '1', 'yes', 'on')) if not isinstance(raw_pitch, bool) else raw_pitch
+
+        raw_roll = self.get_parameter('invert_roll').value
+        self.invert_roll = (str(raw_roll).lower() in ('true', '1', 'yes', 'on')) if not isinstance(raw_roll, bool) else raw_roll
+
         self.watchdog_sec = self.get_parameter('watchdog_timeout').get_parameter_value().double_value
 
         # Publisher
@@ -86,6 +92,8 @@ class CT6BTeleopNode(Node):
         self.get_logger().info(f'Max Linear Speed   : {self.max_lin} m/s')
         self.get_logger().info(f'Max Angular Speed  : {self.max_ang} rad/s')
         self.get_logger().info(f'Deadzone           : +/- {self.deadzone} us around {self.center_pwm} us')
+        self.get_logger().info(f'Invert Pitch       : {self.invert_pitch}')
+        self.get_logger().info(f'Invert Roll        : {self.invert_roll}')
         self.get_logger().info(f'Configured Port    : {self.port} @ {self.baud} baud')
         self.get_logger().info('====================================================')
 

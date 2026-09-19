@@ -70,12 +70,18 @@ def test_integration():
         assert abs(last_twist.angular.z) < 0.001, f"Expected 0.0 angular, got {last_twist.angular.z}"
         print(f"Forward (Stick Up) Test OK: lin={last_twist.linear.x}, ang={last_twist.angular.z}")
 
-        # 3. Left Turn test (Roll=1000 produces +1.0 rad/s)
-        left_pkt = make_packet([1000, 1500, 1000, 1500, 1000, 1000, 0])
+        # 3. Roll Stick test (with invert_roll=True, Roll=2000 produces +1.0 rad/s Left Turn, Roll=1000 produces -1.0 rad/s Right Turn)
+        left_pkt = make_packet([2000, 1500, 1000, 1500, 1000, 1000, 0])
         last_twist = pump_packets(left_pkt, duration=0.8)
         assert abs(last_twist.linear.x) < 0.001, f"Expected 0.0 linear, got {last_twist.linear.x}"
-        assert abs(last_twist.angular.z - 1.0) < 0.02, f"Expected 1.0 angular, got {last_twist.angular.z}"
-        print(f"Full Left Turn Test OK: lin={last_twist.linear.x}, ang={last_twist.angular.z}")
+        assert abs(last_twist.angular.z - 1.0) < 0.02, f"Expected +1.0 angular, got {last_twist.angular.z}"
+        print(f"Full Left Turn (Roll=2000) Test OK: lin={last_twist.linear.x}, ang={last_twist.angular.z}")
+
+        right_pkt = make_packet([1000, 1500, 1000, 1500, 1000, 1000, 0])
+        last_twist = pump_packets(right_pkt, duration=0.8)
+        assert abs(last_twist.linear.x) < 0.001, f"Expected 0.0 linear, got {last_twist.linear.x}"
+        assert abs(last_twist.angular.z - (-1.0)) < 0.02, f"Expected -1.0 angular, got {last_twist.angular.z}"
+        print(f"Full Right Turn (Roll=1000) Test OK: lin={last_twist.linear.x}, ang={last_twist.angular.z}")
 
         print("\nALL INTEGRATION TESTS PASSED PERFECTLY!")
     finally:

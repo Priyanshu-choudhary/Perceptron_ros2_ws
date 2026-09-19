@@ -78,12 +78,12 @@ slam_toolbox:
     # Turn this back ON before mapping anything with corridors or a space too
     # large to see across, and raise loop_match_minimum_response_fine to ~0.6
     # and loop_match_minimum_chain_size to ~15 when you do.
-    do_loop_closing: false
+    do_loop_closing: true
     loop_search_maximum_distance: 3.0
-    loop_match_minimum_chain_size: 10
+    loop_match_minimum_chain_size: 15        # Was 10 (higher prevents false snaps)
     loop_match_maximum_variance_coarse: 3.0
     loop_match_minimum_response_coarse: 0.35
-    loop_match_minimum_response_fine: 0.45
+    loop_match_minimum_response_fine: 0.60 
 
     # --- correlation search windows ---
     correlation_search_space_dimension: 0.5

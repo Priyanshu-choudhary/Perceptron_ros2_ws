@@ -105,6 +105,6 @@ ros2 topic echo /cmd_vel
 | `max_pwm` | int | `2000` | Max PWM value (µs) |
 | `channel_pitch` | int | `1` | Pitch channel index (0-indexed: 1 = Ch2) |
 | `channel_roll` | int | `0` | Roll channel index (0-indexed: 0 = Ch1) |
-| `invert_pitch` | bool | `false` | Invert forward/backward direction |
-| `invert_roll` | bool | `false` | Invert left/right turn direction |
+| `invert_pitch` | bool | `true` | Invert forward/backward direction |
+| `invert_roll` | bool | `true` | Invert left/right turn direction |
 | `watchdog_timeout` | float | `0.5` | Timeout in seconds before zeroing velocity |
