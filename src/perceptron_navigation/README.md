@@ -379,6 +379,112 @@ localisation is also exactly the thing that drifts; the marker does not.
 
 ---
 
+## AR path overlay — the plan drawn on the camera
+
+`/plan` is projected into the front camera's pixels and drawn on the live video,
+so the operator sees where the robot intends to go on the floor of the actual
+room rather than on a map beside it.
+
+```bash
+# on the Jetson, in two shells
+python3 jetson_robot_bridge.py --no-aruco        # releases /dev/video0
+python3 jetson_path_overlay.py --host-ip <operator>
+
+# on the ROS host, alongside navigation.launch.py
+ros2 launch perceptron_navigation path_overlay.launch.py
+
+# on the operator machine
+gst-launch-1.0 -v udpsrc port=5000 caps="application/x-rtp, media=video, encoding-name=H265, payload=96" ! rtph265depay ! h265parse ! avdec_h265 ! autovideosink sync=false
+```
+
+### Why the pixels are computed here and drawn there
+
+The camera never joins the ROS graph — an uncompressed 1280x720 stream is
+~41 MB/s and `perceptron_robot_description/README.md` records what that does to
+node discovery on a 4 GB WSL host. The frame cannot come to the geometry, so the
+geometry goes to the frame: a decimated path is ~2.8 kB, about 41 kB/s at 15 Hz.
+
+`path_overlay_node.py` owns TF, the intrinsics and the Nav2 topics.
+`jetson/jetson_path_overlay.py` receives a list of shapes and draws them,
+knowing nothing about ROS. Projection bugs stay on the machine with a debugger.
+
+**Nothing in this path steers the robot.** If the link dies the operator loses a
+drawing. That is the whole failure mode.
+
+### The camera geometry this depends on
+
+Everything rests on `base_link -> camera_link` in the xacro being right:
+lens 0.42 m above the floor, pitched `-0.07027` rad (**up** 4.03°). Those were
+measured, not modelled, and the overlay is brutally sensitive to them — a 1°
+pitch error puts the path ~9 cm off at 5 m, which reads as a ribbon floating
+above the floor or sinking into it. That is the best check there is that the
+extrinsics are still true: if the ribbon does not lie flat on the ground, go and
+re-measure the mount before believing anything else.
+
+Consequences of that geometry, all verified against the arithmetic:
+
+| | |
+| --- | --- |
+| horizon | v = 377 |
+| nearest visible floor | 0.535 m ahead of the lens |
+| floor occupies | v = 377 … 720 |
+| 2 m / 5 m / 8 m ahead | v = 465 / 411 / 398 |
+
+5 m and 8 m are **13 px apart**, which is why `max_range` is 8.0: past that the
+path is pixels from the horizon and contributes nothing but jitter.
+
+### Why the cull is two-stage and not just Z > 0
+
+The lens is ~115° horizontal (fx ≈ 411 over 1280 px) and a 5-coefficient
+plumb-bob model is only valid inside the cone it was fitted in. Differentiating
+the radial polynomial with this calibration:
+
+```
+r = 1.761  image corner  (60.4° off axis)   d/dr = +1.07
+r = 2.653  model stops being monotonic (69.3°)
+r = 3.0    outside the FOV                  d/dr = -1.29
+```
+
+Past r ≈ 2.65 the model **folds**: points well outside the field of view come
+back with plausible pixel coordinates inside the image. Sweeping ground points
+across bearings, 37 of them land inside the frame — e.g. a point 73° off axis
+projecting to (1252, 482). The symptom would be a phantom stripe whipping across
+the picture whenever the robot turns and the path sweeps past the lens edge, and
+`Z > 0` does not catch it because those points are genuinely in front of the
+camera, just not in view.
+
+So the mask is `Z > min_z` **and** `r <= 2.35` (66.9°), applied before
+`projectPoints`. That sits above the image corner and below the fold. It also
+bounds the projected pixel magnitude, which is what stops the int32 overflow an
+unculled point produces — an 84°-off-axis point projects to (3707183, -544221).
+
+A polyline is only drawn between two points that both survived; joining across
+a gap draws a chord through exactly what the cull was protecting against.
+
+### The ribbon
+
+The band is the chassis's true width (0.4526 m), offset **in metres on the
+ground plane** and then projected — not offset in pixels, which would draw a
+constant-width screen stripe that reads as a flat sticker. Perspective narrows
+it with distance (193 px at 1 m, 47 px at 4 m), which is what sells it as lying
+on the floor, and it doubles as a clearance gauge: if it fits between two
+obstacles on screen, the robot fits.
+
+### Clocks
+
+**No timestamp is compared across the two machines.** The host's and the
+Jetson's clocks are independent and undisciplined — `JetsonClock` in
+`jetson_bridge_node.py` exists solely because of that. Overlay age is measured
+on the Jetson as `time.monotonic()` since it received the payload.
+
+The TF lookup asks for the *latest* transform rather than the frame's capture
+time, because the frame is on the far side of a UDP video link with no shared
+clock. `aruco_detector_node.py` already does the same. The cost is that while
+the robot moves, the overlay lags the picture by the video pipeline's latency
+and appears to swim slightly. That is cosmetic and expected, not a projection
+bug; past 0.35 s the renderer says so on the HUD, and past 0.7 s it drops the
+overlay rather than show a path frozen where the robot used to be going.
+
 ## Where this goes next
 
 **Level 8, exploration.** Add `nav2_wfd` or `explore_lite`: pick frontiers

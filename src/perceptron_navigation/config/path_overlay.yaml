@@ -1,0 +1,69 @@
+# AR path overlay: project the Nav2 plan into camera pixels and push them to
+# the Jetson, which draws them on the live frame and streams H.265 back.
+#
+# Nothing here steers the robot. The worst failure is a missing drawing.
+#
+# The intrinsics are the same measured values as aruco_localization.yaml, at
+# the 1280x720 they were taken at, and they should STAY at that resolution
+# even if the Jetson encodes something else -- jetson_path_overlay.py rescales
+# pixel coordinates locally, so the two sides never have to agree on the video
+# size. fx ~= 411 over 1280 px is a ~115 deg horizontal field of view, and that
+# wide lens is why max_radius exists: see the cull note below.
+
+path_overlay_node:
+  ros__parameters:
+    use_sim_time: false
+
+    jetson_ip: "192.168.1.7"
+    overlay_port: 5558           # jetson_path_overlay.py binds PULL here.
+                                 # 5555 telemetry and 5556 cmd belong to
+                                 # jetson_robot_bridge.py; do not reuse them.
+
+    global_path_topic: "/plan"
+    local_path_topic: "/local_plan"
+
+    camera_optical_frame: "camera_optical_link"
+
+    camera_matrix: [410.9212916385953, 0.0, 634.8042096493966,
+                    0.0, 411.4395116912116, 347.58359871233904,
+                    0.0, 0.0, 1.0]
+    dist_coeffs: [0.030287865182229395, -0.002860707267771121,
+                  -0.004223044189411946, -0.0003374289867825264,
+                  -0.0003820853552867496]
+    calibration_width: 1280
+    calibration_height: 720
+
+    publish_rate: 15.0           # match the Jetson's encode rate; faster only
+                                 # burns Wi-Fi on frames that are never drawn
+    path_timeout: 2.0            # clear the overlay this long after Nav2 stops
+                                 # publishing, so a finished goal's path does
+                                 # not hang over a stationary robot
+
+    # --- cull -----------------------------------------------------------
+    # Z alone is NOT sufficient. With this calibration the radial polynomial
+    # stops being monotonic near r = 2.4, so points outside the field of view
+    # fold back to plausible pixels inside the image. The symptom is a phantom
+    # stripe whipping across the frame whenever the robot turns and the path
+    # sweeps past the lens edge. The image corner is r = 1.76, so 2.35 admits
+    # the whole picture and still stops the fold.
+    min_z: 0.15
+    max_radius: 2.35
+    max_range: 8.0               # past this the path is pixels from the
+                                 # horizon and is pure clutter
+    max_points_per_line: 256     # ~1.2 kB/frame, 18 kB/s at 15 Hz
+
+    # --- style ----------------------------------------------------------
+    # The chassis is 0.415 x 0.4526 m, so the ribbon is a real clearance gauge:
+    # if it fits between two obstacles on screen, the robot fits in the room.
+    # Offsetting happens in metres on the ground plane, not in pixels, so
+    # perspective narrows it with distance and it reads as lying on the floor.
+    draw_ribbon: true
+    ribbon_width: 0.4526
+    ribbon_alpha: 0.30
+    draw_local_plan: true
+    draw_goal: true
+
+    # RGB, not BGR. The renderer converts.
+    global_rgb: [60, 220, 90]
+    local_rgb: [70, 160, 255]
+    goal_rgb: [255, 210, 40]
