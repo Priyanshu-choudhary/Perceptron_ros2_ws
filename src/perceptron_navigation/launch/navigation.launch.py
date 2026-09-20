@@ -17,6 +17,15 @@ Real robot:
 
     ros2 launch perceptron_navigation navigation.launch.py \\
         use_sim_time:=false robot_cmd_vel_topic:=/cmd_vel
+
+With the AR path overlay on the front camera, so no separate terminal is
+needed (jetson_path_overlay.py must be running on the Nano):
+
+    ros2 launch perceptron_navigation navigation.launch.py \\
+        use_sim_time:=false robot_cmd_vel_topic:=/cmd_vel overlay:=true
+
+If localisation is already owned by localization.launch.py, add
+localization:=external or two AMCLs will fight over map -> odom.
 """
 
 from launch import LaunchDescription
@@ -83,6 +92,16 @@ def generate_launch_description():
                         'slam = slam_toolbox; amcl = map_server + AMCL; '
                         'external = neither, which is what the map-frame EKF '
                         '(and VIO feeding it) needs. Exactly one publisher.'),
+        DeclareLaunchArgument(
+            'overlay', default_value='false',
+            description='true also starts path_overlay_node, which projects '
+                        '/plan into the front camera and pushes the pixels to '
+                        'the Jetson to draw. Off by default because it needs '
+                        'jetson_path_overlay.py running on the Nano to be of '
+                        'any use, and it is a viewing aid, not part of driving.'),
+        DeclareLaunchArgument(
+            'overlay_jetson_ip', default_value='192.168.1.7',
+            description='where path_overlay_node pushes projected pixels'),
         DeclareLaunchArgument(
             'nav_profile', default_value='dwb',
             description='dwb   = NavFn + DWB, the profile every measured number '
@@ -174,5 +193,18 @@ def generate_launch_description():
         }],
     )
 
+    # Viewing aid only: it subscribes to /plan and TF and publishes nothing
+    # into the robot, so starting or stopping it cannot disturb navigation.
+    overlay = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([pkg_share, 'launch', 'path_overlay.launch.py'])),
+        launch_arguments={
+            'use_sim_time': use_sim_time,
+            'jetson_ip': LaunchConfiguration('overlay_jetson_ip'),
+        }.items(),
+        condition=IfCondition(LaunchConfiguration('overlay')),
+    )
+
     return LaunchDescription(
-        args + [GroupAction([slam_toolbox, localization, navigation, relay])])
+        args + [GroupAction([slam_toolbox, localization, navigation, relay,
+                             overlay])])
