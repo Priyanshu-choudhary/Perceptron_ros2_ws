@@ -230,7 +230,8 @@ class PathOverlayNode(Node):
         self.local_path = None
         self.local_path_t = 0.0
 
-        self.create_subscription(Path, p('global_path_topic').value,
+        self.global_path_topic = p('global_path_topic').value
+        self.create_subscription(Path, self.global_path_topic,
                                  self._global_cb, 10)
         self.create_subscription(Path, p('local_path_topic').value,
                                  self._local_cb, 10)
@@ -252,7 +253,7 @@ class PathOverlayNode(Node):
         self.seq = 0
         self.sent = 0
         self.dropped = 0
-        self._warned_tf = False
+        self.last_error = ''
 
         rate = float(p('publish_rate').value)
         self.create_timer(1.0 / max(rate, 1.0), self._tick)
@@ -287,13 +288,15 @@ class PathOverlayNode(Node):
             tf = self.tf_buffer.lookup_transform(
                 self.camera_optical_frame, source_frame, rclpy.time.Time())
         except Exception as exc:
-            if not self._warned_tf:
-                self.get_logger().warn(
-                    f'No transform {source_frame} -> {self.camera_optical_frame} '
-                    f'({exc}); overlay idle.', throttle_duration_sec=5.0)
-                self._warned_tf = True
+            # Throttled rather than once-only: a transform that is missing for
+            # ten minutes should still be saying so at minute ten, because the
+            # operator looking at blank video needs to know which of the four
+            # reasons for blankness this is.
+            self.last_error = f'no tf {source_frame} -> {self.camera_optical_frame}'
+            self.get_logger().warn(
+                f'No transform {source_frame} -> {self.camera_optical_frame} '
+                f'({exc}); overlay idle.', throttle_duration_sec=10.0)
             return None
-        self._warned_tf = False
         q = tf.transform.rotation
         t = tf.transform.translation
         M = np.eye(4, dtype=np.float64)
@@ -391,6 +394,14 @@ class PathOverlayNode(Node):
         self.seq += 1
 
         if gpath is None and lpath is None:
+            # Distinguish "the planner is not running" from "the planner is
+            # running and idle". count_publishers is the cheapest honest test:
+            # with Nav2 down there is nobody on /plan at all, whereas an idle
+            # Nav2 holds the publisher open between goals.
+            if self.count_publishers(self.global_path_topic) == 0:
+                payload['hud'].append('no plan - planner not running')
+            else:
+                payload['hud'].append('no plan - idle, send a goal')
             # Send the empty frame anyway. Silence would leave the renderer
             # holding the last drawing until its own timeout, so an overlay
             # from the previous goal would linger over a stopped robot.
@@ -400,6 +411,7 @@ class PathOverlayNode(Node):
         frame_id = (gpath or lpath).header.frame_id or 'map'
         M = self._lookup(frame_id)
         if M is None:
+            payload['hud'].append(self.last_error or 'no tf')
             self._send(payload)
             return
 
@@ -433,6 +445,12 @@ class PathOverlayNode(Node):
             if Ml is not None:
                 payload['polylines'].extend(
                     self._polylines_for(Ml, lpts, self.local_rgb, 2))
+
+        # Projected fine, but every point failed the cull -- the plan is behind
+        # the robot or off to the side. Without this the operator cannot tell
+        # it apart from a plan that was never received.
+        if not payload['polygons'] and not payload['polylines']:
+            payload['hud'].append('plan outside camera view')
 
         self._send(payload)
 
