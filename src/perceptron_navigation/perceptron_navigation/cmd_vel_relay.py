@@ -9,6 +9,10 @@ base listens on /diff_drive_controller/cmd_vel_unstamped because
 diff_drive_controller has `use_stamped_vel: false`. The real base listens on
 /cmd_vel via stm32_bridge_node.
 
+INPUT AND OUTPUT MUST DIFFER. A relay pointed at its own input topic feeds
+itself forever; the node refuses to start rather than do that. See the check
+in __init__ for why that is a refusal and not a warning.
+
 A launch-file remap would also work, but a node is easier to reason about when
 several things want to drive the robot: here you can see, in one place, whether
 Nav2 or the docking controller is the one talking.
@@ -38,6 +42,32 @@ class CmdVelRelay(Node):
         self.output_topic = self.get_parameter('output_topic').value
         self.enabled = bool(self.get_parameter('enabled').value)
         self.warn_after = float(self.get_parameter('warn_after_seconds').value)
+
+        # A relay whose input IS its output feeds itself: every Twist it
+        # receives it republishes onto the same topic, receives again, and
+        # republishes forever. One command from Nav2 becomes a permanent
+        # self-sustaining stream, so the robot keeps driving long after the
+        # goal is reached, and the Jetson's 500 ms cmd_vel watchdog can never
+        # fire because commands never stop arriving.
+        #
+        # This is easy to walk into rather than exotic: on the real robot the
+        # base listens on /cmd_vel and Nav2 already publishes to /cmd_vel, so
+        # passing robot_cmd_vel_topic:=/cmd_vel alongside the default
+        # nav_cmd_vel_topic=/cmd_vel produces exactly this. The right answer
+        # there is relay:=false -- no relay is needed when the two topics are
+        # already the same.
+        #
+        # Refusing to start is deliberate. Starting and quietly not relaying
+        # would look identical to a healthy relay, and this failure mode drives
+        # the robot into walls.
+        if self.input_topic == self.output_topic:
+            self.get_logger().fatal(
+                f'input_topic and output_topic are both "{self.input_topic}". '
+                'This relay would feed itself and drive the base forever. '
+                'Nothing needs relaying when they are the same topic: pass '
+                'relay:=false, or set robot_cmd_vel_topic to the topic the '
+                'base actually listens on.')
+            raise SystemExit(1)
 
         self.pub = self.create_publisher(Twist, self.output_topic, 10)
         self.create_subscription(Twist, self.input_topic, self._cb, 10)

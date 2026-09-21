@@ -16,7 +16,16 @@ across Nav2 patch releases. Two Perceptron-specific pieces are added:
 Real robot:
 
     ros2 launch perceptron_navigation navigation.launch.py \\
-        use_sim_time:=false robot_cmd_vel_topic:=/cmd_vel
+        use_sim_time:=false relay:=false
+
+NOTE: do NOT pass robot_cmd_vel_topic:=/cmd_vel. nav_cmd_vel_topic already
+defaults to /cmd_vel, so that makes cmd_vel_relay's input and output the same
+topic and it feeds itself -- the base then drives forever on a looping command
+and the Jetson's watchdog never fires because commands never stop arriving.
+On the real robot jetson_bridge_node already listens on /cmd_vel, which is
+where Nav2 publishes, so nothing needs relaying at all: use relay:=false.
+The relay exists for simulation, where the base listens on
+/diff_drive_controller/cmd_vel_unstamped instead.
 
 With the AR path overlay on the front camera, so no separate terminal is
 needed (jetson_path_overlay.py must be running on the Nano):
